@@ -1,6 +1,6 @@
-# Kris — Research Notes
+# Kris — Learning Notes
 
-一个面向研究笔记与技术写作的个人静态博客，使用 Astro 构建并通过 GitHub Pages 发布。
+一个用于长期保存论文阅读、学习记录和阶段性思考的个人知识档案，使用 Astro 构建并通过 GitHub Pages 发布。
 
 ## 为什么选择 Astro
 
@@ -27,24 +27,50 @@ npm run build
 npm run preview
 ```
 
-## 写一篇文章
+## 写一篇笔记
 
 在 `src/content/posts` 新建 Markdown 文件：
 
 ```md
 ---
-title: 文章标题
-description: 一句话摘要
+title: 笔记标题
+description: 写下这条笔记以后为什么值得回来
 publishDate: 2026-11-19
-tags: [研究方法, 实验]
+tags: [主题一, 主题二]
+noteType: learning
+readingStatus: finished
 draft: false
 featured: false
 ---
 
-从这里开始写正文。
+从这里开始记录理解、疑问和下一步。
 ```
 
-现有三篇内容都设置了 `isExample: true`，用于展示页面。正式发布前可删除它们，或改写后移除该字段。
+`noteType` 支持：
+
+- `paper`：论文阅读笔记；
+- `learning`：课程、书籍、代码或方法的学习记录；
+- `thought`：阶段性的思考与问题。
+
+`readingStatus` 支持 `reading`、`finished` 和 `revisit`，分别对应阅读中、已读和待重读。
+
+## 写一篇论文笔记
+
+复制 `src/content/posts/_paper-note-template.md`，修改文件名并把 `draft` 改为 `false`。论文笔记可以额外填写：
+
+```yaml
+noteType: paper
+readingStatus: reading
+paperTitle: 论文原题
+authors: [Author One, Author Two]
+paperYear: 2026
+venue: 会议或期刊
+paperUrl: https://arxiv.org/abs/xxxx.xxxxx
+```
+
+模板建议保留“为什么读”“一句话结论”“核心方法”“我的理解与疑问”和“下次回看”等部分。最重要的不是复述摘要，而是记录自己的判断和没有想清楚的地方。
+
+当前公开内容都设置了 `isExample: true`，用于展示笔记库、论文信息和正文排版。正式使用时可以删除或改写后移除该字段。
 
 ## 常用修改位置
 
@@ -54,7 +80,8 @@ featured: false
 | 首页介绍和版块文案 | `src/pages/index.astro` |
 | 个人介绍与关注方向 | `src/pages/about.astro` |
 | 颜色、字体与通用样式 | `src/styles/global.css` |
-| 文章字段规则 | `src/content.config.ts` |
+| 笔记字段规则 | `src/content.config.ts` |
+| 搜索与筛选 | `src/pages/posts/index.astro` |
 
 ## 发布到 GitHub Pages
 

@@ -2,7 +2,7 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PostCard from '../components/PostCard.astro';
 import { SITE } from '../config';
-import { formatDate, getPublishedPosts, getReadingTime, postUrl } from '../lib/posts';
+import { formatDate, getPublishedPosts, getReadingTime, NOTE_TYPE_LABELS, postUrl } from '../lib/posts';
 
 const posts = await getPublishedPosts();
 const featured = posts.find((post) => post.data.featured) ?? posts[0];
@@ -21,19 +21,19 @@ const topTags = [...tagCounts.entries()]
 <BaseLayout>
   <section class="home-hero page-width">
     <div class="hero-copy">
-      <p class="eyebrow">Research field notes</p>
-      <h1>把探索，整理成<br /><span>可以复用的知识。</span></h1>
+      <p class="eyebrow">Personal learning archive</p>
+      <h1>把读过的，<br /><span>留给以后的自己。</span></h1>
       <p class="hero-lead">
-        这里记录问题、阅读、实验与复盘。保留推理的路径，也分享抵达答案之前的过程。
+        这里保存论文阅读、学习记录和阶段性的思考。重点不是记住一切，而是以后能重新找到当时为什么这样理解。
       </p>
       <div class="button-row">
-        <a class="button" href="/posts/">阅读文章</a>
-        <a class="button secondary" href="/about/">了解本站</a>
+        <a class="button" href="/posts/">进入笔记库</a>
+        <a class="button secondary" href="/posts/?type=paper">浏览论文笔记</a>
       </div>
       <div class="hero-coordinate" aria-hidden="true">
-        <span>STATIC / MARKDOWN</span>
-        <span>GITHUB PAGES</span>
-        <span>EST. 2026</span>
+        <span>READ / THINK</span>
+        <span>CONNECT / REVISIT</span>
+        <span>LEARNING LOG</span>
       </div>
     </div>
 
@@ -42,13 +42,14 @@ const topTags = [...tagCounts.entries()]
       {featured ? (
         <article class="featured-card">
           <div class="featured-topline">
-            <span>最近更新</span>
-            <span class="pulse"><i></i> Live note</span>
+            <span>最近阅读</span>
+            <span class="pulse"><i></i> Latest note</span>
           </div>
           <div class="featured-body">
             <div class="post-meta">
               <time datetime={featured.data.publishDate.toISOString()}>{formatDate(featured.data.publishDate)}</time>
               <span>{getReadingTime(featured.body)} 分钟阅读</span>
+              <span class="note-type-label">{NOTE_TYPE_LABELS[featured.data.noteType]}</span>
             </div>
             <h2><a href={postUrl(featured)}>{featured.data.title}</a></h2>
             <p>{featured.data.description}</p>
@@ -59,11 +60,11 @@ const topTags = [...tagCounts.entries()]
                 <a class="tag" href={`/tags/${encodeURIComponent(tag)}/`}>#{tag}</a>
               ))}
             </div>
-            {featured.data.isExample && <span class="sample-note">示例文章</span>}
+            {featured.data.isExample && <span class="sample-note">示例笔记</span>}
           </div>
         </article>
       ) : (
-        <div class="empty-state">第一篇文章正在路上。</div>
+        <div class="empty-state">第一条学习笔记正在路上。</div>
       )}
     </div>
   </section>
@@ -71,11 +72,11 @@ const topTags = [...tagCounts.entries()]
   <section class="latest page-width" aria-labelledby="latest-heading">
     <div class="section-heading">
       <div>
-        <p class="eyebrow">Latest writing</p>
-        <h2 id="latest-heading">最近文章</h2>
-        <p>按时间整理的研究笔记、方法与建站记录。</p>
+        <p class="eyebrow">Latest notes</p>
+        <h2 id="latest-heading">最近笔记</h2>
+        <p>最近读过的论文、学到的方法，以及还想继续追问的问题。</p>
       </div>
-      <a class="section-link" href="/archive/">查看全部归档</a>
+      <a class="section-link" href="/archive/">按时间回看</a>
     </div>
     <div>
       {latestPosts.map((post, index) => <PostCard post={post} index={index} />)}
@@ -86,8 +87,8 @@ const topTags = [...tagCounts.entries()]
     <div class="page-width topic-grid">
       <div class="topic-intro">
         <p class="eyebrow">Topic index</p>
-        <h2>沿着主题，继续探索。</h2>
-        <p>主题会随着内容自然生长。现在的条目来自站内示例文章，替换内容后会自动更新。</p>
+        <h2>沿着主题，找回思路。</h2>
+        <p>标签会随着笔记积累自然生长，帮助我从一个概念回到相关的论文、方法与疑问。</p>
       </div>
       <div class="topic-list">
         {topTags.map(([tag, count], index) => (
@@ -102,10 +103,10 @@ const topTags = [...tagCounts.entries()]
   </section>
 
   <section class="manifesto page-width">
-    <div class="manifesto-label">Notes on the process</div>
-    <blockquote>“好的研究记录，不只保存答案，也保存问题是如何被重新定义的。”</blockquote>
+    <div class="manifesto-label">Why keep notes</div>
+    <blockquote>“记录不是为了记住一切，而是让以后还能重新进入当时的思考。”</blockquote>
     <div class="manifesto-copy">
-      <p>这个博客以 Markdown 为内容源，用 Astro 生成纯静态页面，保持阅读体验快速、清晰，也让每一篇笔记都能被 Git 管理。</p>
+      <p>这里不是成果陈列柜，而是一份持续生长的外置记忆。每篇笔记都尽量留下来源、理解、疑问和之后值得回看的线索。</p>
       <a class="section-link" href={SITE.github} target="_blank" rel="noreferrer">在 GitHub 查看源码</a>
     </div>
   </section>

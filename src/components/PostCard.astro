@@ -1,6 +1,12 @@
 ---
 import type { Post } from '../lib/posts';
-import { formatDate, getReadingTime, postUrl } from '../lib/posts';
+import {
+  formatDate,
+  getReadingTime,
+  NOTE_TYPE_LABELS,
+  postUrl,
+  READING_STATUS_LABELS,
+} from '../lib/posts';
 
 interface Props {
   post: Post;
@@ -16,11 +22,20 @@ const { post, index } = Astro.props;
     <div class="post-meta">
       <time datetime={post.data.publishDate.toISOString()}>{formatDate(post.data.publishDate)}</time>
       <span>{getReadingTime(post.body)} 分钟阅读</span>
+      <span class="note-type-label">{NOTE_TYPE_LABELS[post.data.noteType]}</span>
+      {post.data.readingStatus && <span>{READING_STATUS_LABELS[post.data.readingStatus]}</span>}
       {post.data.isExample && <span class="example-label">示例</span>}
     </div>
     <h2><a href={postUrl(post)}>{post.data.title}</a></h2>
     <p>{post.data.description}</p>
-    <div class="tag-row" aria-label="文章标签">
+    {post.data.noteType === 'paper' && post.data.paperTitle && (
+      <p class="paper-source">
+        <span>原论文</span>
+        {post.data.paperTitle}
+        {post.data.paperYear && ` · ${post.data.paperYear}`}
+      </p>
+    )}
+    <div class="tag-row" aria-label="笔记标签">
       {post.data.tags.map((tag) => (
         <a class="tag" href={`/tags/${encodeURIComponent(tag)}/`}>#{tag}</a>
       ))}

@@ -21,13 +21,13 @@ interface Props {
 const { tag, posts } = Astro.props;
 ---
 
-<BaseLayout title={`标签：${tag}`} description={`浏览标签“${tag}”下的全部文章。`}>
+<BaseLayout title={`标签：${tag}`} description={`浏览标签“${tag}”下的全部笔记。`}>
   <header class="page-hero page-width">
     <p class="eyebrow">Topic</p>
     <h1>#{tag}</h1>
-    <p class="lead">共 {posts.length} 篇文章</p>
+    <p class="lead">共 {posts.length} 条笔记</p>
   </header>
-  <section class="page-width" aria-label={`标签 ${tag} 的文章`}>
+  <section class="page-width" aria-label={`标签 ${tag} 的笔记`}>
     {posts.map((post, index) => <PostCard post={post} index={index} />)}
   </section>
 </BaseLayout>

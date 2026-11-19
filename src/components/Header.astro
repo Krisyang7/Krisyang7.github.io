@@ -2,14 +2,24 @@
 import { SITE } from '../config';
 
 const pathname = Astro.url.pathname;
-const navItems = [
-  { href: '/posts/', label: '文章' },
+const navItems: { href: string; label: string; filter?: string }[] = [
+  { href: '/posts/', label: '笔记库' },
+  { href: '/posts/?type=paper', label: '论文阅读', filter: 'paper' },
   { href: '/archive/', label: '归档' },
   { href: '/about/', label: '关于' },
 ];
 
-const isActive = (href: string) =>
-  href === '/' ? pathname === href : pathname.startsWith(href);
+const isActive = (item: (typeof navItems)[number]) => {
+  if (item.filter) {
+    return pathname === '/posts/' && Astro.url.searchParams.get('type') === item.filter;
+  }
+
+  if (item.href === '/posts/') {
+    return pathname.startsWith('/posts/') && Astro.url.searchParams.get('type') !== 'paper';
+  }
+
+  return pathname.startsWith(item.href);
+};
 ---
 
 <header class="site-header">
@@ -23,7 +33,7 @@ const isActive = (href: string) =>
 
     <nav class="desktop-nav" aria-label="主导航">
       {navItems.map((item) => (
-        <a href={item.href} aria-current={isActive(item.href) ? 'page' : undefined}>
+        <a href={item.href} aria-current={isActive(item) ? 'page' : undefined}>
           {item.label}
         </a>
       ))}
@@ -47,7 +57,7 @@ const isActive = (href: string) =>
         </summary>
         <nav aria-label="移动端导航">
           {navItems.map((item) => (
-            <a href={item.href} aria-current={isActive(item.href) ? 'page' : undefined}>
+            <a href={item.href} aria-current={isActive(item) ? 'page' : undefined}>
               {item.label}
             </a>
           ))}

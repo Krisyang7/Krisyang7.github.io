@@ -7,11 +7,11 @@ const postsByYear = Object.groupBy(posts, (post) => String(post.data.publishDate
 const years = Object.keys(postsByYear).sort((a, b) => Number(b) - Number(a));
 ---
 
-<BaseLayout title="归档" description="按时间浏览 Kris 的全部文章。">
+<BaseLayout title="归档" description="按时间浏览 Kris 的全部学习笔记。">
   <header class="page-hero page-width">
     <p class="eyebrow">Timeline</p>
     <h1>归档</h1>
-    <p class="lead">沿着时间回看问题、方法与想法的变化。</p>
+    <p class="lead">沿着时间回看读过什么，也回看理解是怎样慢慢变化的。</p>
   </header>
 
   <div class="archive page-width">

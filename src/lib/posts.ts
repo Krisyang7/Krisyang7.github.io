@@ -2,6 +2,18 @@ import { getCollection, type CollectionEntry } from 'astro:content';
 
 export type Post = CollectionEntry<'posts'>;
 
+export const NOTE_TYPE_LABELS = {
+  paper: '论文笔记',
+  learning: '学习笔记',
+  thought: '思考随记',
+} as const;
+
+export const READING_STATUS_LABELS = {
+  reading: '阅读中',
+  finished: '已读',
+  revisit: '待重读',
+} as const;
+
 export async function getPublishedPosts() {
   const posts = await getCollection('posts', ({ data }) => !data.draft);
   return posts.sort(

@@ -462,6 +462,11 @@ svg {
   font-weight: 750;
 }
 
+.post-meta .note-type-label {
+  color: var(--accent);
+  font-weight: 750;
+}
+
 .post-card h2 {
   margin: 0.55rem 0 0.5rem;
   font-size: clamp(1.25rem, 2vw, 1.65rem);
@@ -481,6 +486,18 @@ svg {
   max-width: 45rem;
   margin: 0;
   color: var(--muted);
+}
+
+.post-card-body > .paper-source {
+  margin-top: 0.75rem;
+  color: var(--faint);
+  font-size: 0.82rem;
+}
+
+.paper-source span {
+  margin-right: 0.45rem;
+  color: var(--teal);
+  font-weight: 700;
 }
 
 .tag-row {

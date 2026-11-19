@@ -8,7 +8,7 @@ posts.forEach((post) => post.data.tags.forEach((tag) => tagCounts.set(tag, (tagC
 const tags = [...tagCounts.entries()].sort((a, b) => a[0].localeCompare(b[0], 'zh-CN'));
 ---
 
-<BaseLayout title="标签" description="按主题浏览站内文章。">
+<BaseLayout title="标签" description="按主题浏览站内学习笔记。">
   <header class="page-hero page-width">
     <p class="eyebrow">Topic index</p>
     <h1>标签</h1>
@@ -18,7 +18,7 @@ const tags = [...tagCounts.entries()].sort((a, b) => a[0].localeCompare(b[0], 'z
     {tags.map(([tag, count]) => (
       <a href={`/tags/${encodeURIComponent(tag)}/`}>
         <strong>{tag}</strong>
-        <span>{count} 篇文章</span>
+        <span>{count} 条笔记</span>
       </a>
     ))}
   </section>
