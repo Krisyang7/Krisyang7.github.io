@@ -74,7 +74,9 @@ const posts = await getPublishedPosts();
     </div>
 
     <div id="no-results" class="empty-state" hidden>
-      没有找到匹配的笔记。可以换一个关键词，或清除筛选条件。
+      {posts.length === 0
+        ? '笔记库还是空的。写下第一篇笔记后，它会出现在这里。'
+        : '没有找到匹配的笔记。可以换一个关键词，或清除筛选条件。'}
     </div>
   </section>
 </BaseLayout>

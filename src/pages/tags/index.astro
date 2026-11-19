@@ -15,12 +15,14 @@ const tags = [...tagCounts.entries()].sort((a, b) => a[0].localeCompare(b[0], 'z
     <p class="lead">从一个关键词出发，找到相关的笔记与方法。</p>
   </header>
   <section class="tag-cloud page-width" aria-label="全部标签">
-    {tags.map(([tag, count]) => (
+    {tags.length > 0 ? tags.map(([tag, count]) => (
       <a href={`/tags/${encodeURIComponent(tag)}/`}>
         <strong>{tag}</strong>
         <span>{count} 条笔记</span>
       </a>
-    ))}
+    )) : (
+      <div class="empty-state">还没有标签。它们会随着新笔记自动出现。</div>
+    )}
   </section>
 </BaseLayout>
 
@@ -54,5 +56,9 @@ const tags = [...tagCounts.entries()].sort((a, b) => a[0].localeCompare(b[0], 'z
   .tag-cloud span {
     color: var(--faint);
     font-size: 0.8rem;
+  }
+
+  .tag-cloud .empty-state {
+    grid-column: 1 / -1;
   }
 </style>

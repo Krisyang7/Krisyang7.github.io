@@ -15,7 +15,7 @@ const years = Object.keys(postsByYear).sort((a, b) => Number(b) - Number(a));
   </header>
 
   <div class="archive page-width">
-    {years.map((year) => (
+    {years.length > 0 ? years.map((year) => (
       <section class="year-group" aria-labelledby={`year-${year}`}>
         <h2 id={`year-${year}`}>{year}</h2>
         <div class="year-posts">
@@ -28,7 +28,9 @@ const years = Object.keys(postsByYear).sort((a, b) => Number(b) - Number(a));
           ))}
         </div>
       </section>
-    ))}
+    )) : (
+      <div class="empty-state">还没有可以归档的笔记。</div>
+    )}
   </div>
 </BaseLayout>
 

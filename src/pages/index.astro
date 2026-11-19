@@ -79,7 +79,9 @@ const topTags = [...tagCounts.entries()]
       <a class="section-link" href="/archive/">按时间回看</a>
     </div>
     <div>
-      {latestPosts.map((post, index) => <PostCard post={post} index={index} />)}
+      {latestPosts.length > 0 ? latestPosts.map((post, index) => <PostCard post={post} index={index} />) : (
+        <div class="empty-state">笔记库还是空的。下一次阅读，可以从这里开始记录。</div>
+      )}
     </div>
   </section>
 
@@ -91,13 +93,15 @@ const topTags = [...tagCounts.entries()]
         <p>标签会随着笔记积累自然生长，帮助我从一个概念回到相关的论文、方法与疑问。</p>
       </div>
       <div class="topic-list">
-        {topTags.map(([tag, count], index) => (
+        {topTags.length > 0 ? topTags.map(([tag, count], index) => (
           <a href={`/tags/${encodeURIComponent(tag)}/`}>
             <span class="topic-number">{String(index + 1).padStart(2, '0')}</span>
             <strong>{tag}</strong>
             <span>{count} 篇</span>
           </a>
-        ))}
+        )) : (
+          <div class="empty-topic">写下第一篇笔记后，主题会自动出现在这里。</div>
+        )}
       </div>
     </div>
   </section>
@@ -305,6 +309,12 @@ const topTags = [...tagCounts.entries()]
 
   .topic-list {
     border-top: 1px solid var(--line);
+  }
+
+  .empty-topic {
+    padding: 2rem 0;
+    color: var(--muted);
+    border-bottom: 1px solid var(--line);
   }
 
   .topic-list a {
