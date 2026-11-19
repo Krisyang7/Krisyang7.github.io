@@ -1,0 +1,59 @@
+---
+import { SITE } from '../config';
+
+const pathname = Astro.url.pathname;
+const navItems = [
+  { href: '/posts/', label: '文章' },
+  { href: '/archive/', label: '归档' },
+  { href: '/about/', label: '关于' },
+];
+
+const isActive = (href: string) =>
+  href === '/' ? pathname === href : pathname.startsWith(href);
+---
+
+<header class="site-header">
+  <div class="header-inner page-width">
+    <a class="brand" href="/" aria-label={`${SITE.title} 首页`}>
+      <span class="brand-mark" aria-hidden="true">
+        <span></span><span></span><span></span>
+      </span>
+      <span>{SITE.shortTitle}</span>
+    </a>
+
+    <nav class="desktop-nav" aria-label="主导航">
+      {navItems.map((item) => (
+        <a href={item.href} aria-current={isActive(item.href) ? 'page' : undefined}>
+          {item.label}
+        </a>
+      ))}
+      <a href={SITE.github} target="_blank" rel="noreferrer">GitHub</a>
+    </nav>
+
+    <div class="header-actions">
+      <button class="icon-button theme-toggle" type="button" data-theme-toggle aria-label="切换颜色主题">
+        <svg class="sun-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="3.5"></circle>
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"></path>
+        </svg>
+        <svg class="moon-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M20 15.2A8.5 8.5 0 0 1 8.8 4a8.5 8.5 0 1 0 11.2 11.2Z"></path>
+        </svg>
+      </button>
+
+      <details class="mobile-nav">
+        <summary class="icon-button" aria-label="打开导航菜单">
+          <span></span><span></span><span></span>
+        </summary>
+        <nav aria-label="移动端导航">
+          {navItems.map((item) => (
+            <a href={item.href} aria-current={isActive(item.href) ? 'page' : undefined}>
+              {item.label}
+            </a>
+          ))}
+          <a href={SITE.github} target="_blank" rel="noreferrer">GitHub</a>
+        </nav>
+      </details>
+    </div>
+  </div>
+</header>

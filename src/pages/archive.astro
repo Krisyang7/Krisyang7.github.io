@@ -1,0 +1,113 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { formatDate, getPublishedPosts, postUrl } from '../lib/posts';
+
+const posts = await getPublishedPosts();
+const postsByYear = Object.groupBy(posts, (post) => String(post.data.publishDate.getFullYear()));
+const years = Object.keys(postsByYear).sort((a, b) => Number(b) - Number(a));
+---
+
+<BaseLayout title="归档" description="按时间浏览 Kris 的全部文章。">
+  <header class="page-hero page-width">
+    <p class="eyebrow">Timeline</p>
+    <h1>归档</h1>
+    <p class="lead">沿着时间回看问题、方法与想法的变化。</p>
+  </header>
+
+  <div class="archive page-width">
+    {years.map((year) => (
+      <section class="year-group" aria-labelledby={`year-${year}`}>
+        <h2 id={`year-${year}`}>{year}</h2>
+        <div class="year-posts">
+          {postsByYear[year]?.map((post) => (
+            <article>
+              <time datetime={post.data.publishDate.toISOString()}>{formatDate(post.data.publishDate)}</time>
+              <h3><a href={postUrl(post)}>{post.data.title}</a></h3>
+              {post.data.isExample && <span>示例</span>}
+            </article>
+          ))}
+        </div>
+      </section>
+    ))}
+  </div>
+</BaseLayout>
+
+<style>
+  .archive {
+    max-width: 62rem;
+  }
+
+  .year-group {
+    display: grid;
+    grid-template-columns: 9rem minmax(0, 1fr);
+    gap: 2rem;
+    margin-bottom: 4rem;
+  }
+
+  .year-group > h2 {
+    position: sticky;
+    top: 6rem;
+    align-self: start;
+    margin: 0;
+    color: var(--accent);
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 2rem;
+  }
+
+  .year-posts {
+    border-top: 1px solid var(--line);
+  }
+
+  .year-posts article {
+    display: grid;
+    grid-template-columns: 9rem minmax(0, 1fr) auto;
+    gap: 1rem;
+    align-items: baseline;
+    padding: 1.15rem 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .year-posts time,
+  .year-posts article > span {
+    color: var(--faint);
+    font-size: 0.78rem;
+  }
+
+  .year-posts article > span {
+    color: var(--teal);
+    font-weight: 700;
+  }
+
+  .year-posts h3 {
+    margin: 0;
+    font-size: 1rem;
+  }
+
+  .year-posts a {
+    text-decoration: none;
+  }
+
+  .year-posts a:hover {
+    color: var(--accent);
+  }
+
+  @media (max-width: 680px) {
+    .year-group {
+      grid-template-columns: 1fr;
+      gap: 1rem;
+    }
+
+    .year-group > h2 {
+      position: static;
+    }
+
+    .year-posts article {
+      grid-template-columns: 1fr auto;
+    }
+
+    .year-posts h3 {
+      grid-column: 1 / -1;
+      grid-row: 2;
+    }
+  }
+</style>

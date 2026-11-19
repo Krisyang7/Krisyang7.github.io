@@ -1,0 +1,424 @@
+---
+import { render } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import {
+  formatDate,
+  getPublishedPosts,
+  getReadingTime,
+  postUrl,
+  type Post,
+} from '../../lib/posts';
+
+export async function getStaticPaths() {
+  const posts = await getPublishedPosts();
+
+  return posts.map((post, index) => ({
+    params: { slug: post.id },
+    props: {
+      post,
+      newerPost: index > 0 ? posts[index - 1] : undefined,
+      olderPost: index < posts.length - 1 ? posts[index + 1] : undefined,
+    },
+  }));
+}
+
+interface Props {
+  post: Post;
+  newerPost?: Post;
+  olderPost?: Post;
+}
+
+const { post, newerPost, olderPost } = Astro.props;
+const { Content, headings } = await render(post);
+const tocHeadings = headings.filter((heading) => heading.depth <= 3);
+---
+
+<BaseLayout title={post.data.title} description={post.data.description}>
+  <article>
+    <header class="article-header page-width">
+      <a class="back-link" href="/posts/">全部文章</a>
+      <div class="article-meta post-meta">
+        <time datetime={post.data.publishDate.toISOString()}>{formatDate(post.data.publishDate)}</time>
+        <span>{getReadingTime(post.body)} 分钟阅读</span>
+        {post.data.updatedDate && <span>更新于 {formatDate(post.data.updatedDate)}</span>}
+        {post.data.isExample && <span class="example-label">示例文章</span>}
+      </div>
+      <h1>{post.data.title}</h1>
+      <p class="article-description">{post.data.description}</p>
+      <div class="tag-row">
+        {post.data.tags.map((tag) => (
+          <a class="tag" href={`/tags/${encodeURIComponent(tag)}/`}>#{tag}</a>
+        ))}
+      </div>
+    </header>
+
+    {tocHeadings.length > 0 && (
+      <details class="mobile-toc page-width">
+        <summary>本文目录</summary>
+        <ol>
+          {tocHeadings.map((heading) => (
+            <li class={`depth-${heading.depth}`}><a href={`#${heading.slug}`}>{heading.text}</a></li>
+          ))}
+        </ol>
+      </details>
+    )}
+
+    <div class="article-shell page-width">
+      <div class="article-rail" aria-hidden="true">
+        <span>READ</span>
+        <i></i>
+      </div>
+      <div class="prose">
+        <Content />
+      </div>
+      {tocHeadings.length > 0 && (
+        <aside class="desktop-toc" aria-label="本文目录">
+          <span>本文目录</span>
+          <ol>
+            {tocHeadings.map((heading) => (
+              <li class={`depth-${heading.depth}`}><a href={`#${heading.slug}`}>{heading.text}</a></li>
+            ))}
+          </ol>
+        </aside>
+      )}
+    </div>
+
+    <nav class="post-nav page-width" aria-label="相邻文章">
+      {olderPost ? (
+        <a href={postUrl(olderPost)}>
+          <span>上一篇</span>
+          <strong>{olderPost.data.title}</strong>
+        </a>
+      ) : <span></span>}
+      {newerPost ? (
+        <a class="next" href={postUrl(newerPost)}>
+          <span>下一篇</span>
+          <strong>{newerPost.data.title}</strong>
+        </a>
+      ) : <span></span>}
+    </nav>
+  </article>
+</BaseLayout>
+
+<style>
+  .article-header {
+    max-width: 60rem;
+    padding-top: 7rem;
+    padding-bottom: 4.5rem;
+    text-align: center;
+  }
+
+  .back-link {
+    display: inline-block;
+    margin-bottom: 2.2rem;
+    color: var(--accent);
+    font-size: 0.84rem;
+    font-weight: 700;
+  }
+
+  .article-meta,
+  .article-header .tag-row {
+    justify-content: center;
+  }
+
+  .article-header h1 {
+    max-width: 58rem;
+    margin: 1.2rem auto 0;
+    font-size: clamp(2.6rem, 7vw, 5rem);
+    line-height: 1.08;
+    letter-spacing: -0.06em;
+  }
+
+  .article-description {
+    max-width: 42rem;
+    margin: 1.5rem auto 0;
+    color: var(--muted);
+    font-size: 1.15rem;
+  }
+
+  .article-shell {
+    display: grid;
+    grid-template-columns: 4rem minmax(0, var(--reading)) minmax(10rem, 1fr);
+    gap: clamp(2rem, 5vw, 4.5rem);
+    align-items: start;
+    justify-content: center;
+  }
+
+  .article-rail {
+    position: sticky;
+    top: 7rem;
+    display: flex;
+    height: 16rem;
+    align-items: center;
+    flex-direction: column;
+    color: var(--faint);
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 0.66rem;
+    letter-spacing: 0.15em;
+    writing-mode: vertical-rl;
+  }
+
+  .article-rail i {
+    width: 1px;
+    height: 7rem;
+    margin-top: 0.8rem;
+    background: var(--line-strong);
+  }
+
+  .desktop-toc {
+    position: sticky;
+    top: 7rem;
+    padding-left: 1.2rem;
+    border-left: 1px solid var(--line);
+  }
+
+  .desktop-toc > span {
+    color: var(--faint);
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+  }
+
+  .desktop-toc ol,
+  .mobile-toc ol {
+    margin: 0.75rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .desktop-toc li {
+    margin: 0.45rem 0;
+    font-size: 0.82rem;
+    line-height: 1.45;
+  }
+
+  .desktop-toc .depth-3,
+  .mobile-toc .depth-3 {
+    padding-left: 0.9rem;
+  }
+
+  .desktop-toc a,
+  .mobile-toc a {
+    color: var(--muted);
+    text-decoration: none;
+  }
+
+  .desktop-toc a:hover,
+  .mobile-toc a:hover {
+    color: var(--accent);
+  }
+
+  .mobile-toc {
+    display: none;
+    max-width: var(--reading);
+    margin-bottom: 2.5rem;
+    padding: 1rem 1.1rem;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+  }
+
+  .mobile-toc summary {
+    color: var(--text);
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .mobile-toc li {
+    margin: 0.5rem 0;
+  }
+
+  .prose {
+    min-width: 0;
+    font-size: 1.075rem;
+    line-height: 1.85;
+  }
+
+  .prose :global(> *:first-child) {
+    margin-top: 0;
+  }
+
+  .prose :global(h2),
+  .prose :global(h3) {
+    scroll-margin-top: 6rem;
+    line-height: 1.3;
+    letter-spacing: -0.03em;
+  }
+
+  .prose :global(h2) {
+    margin: 3.7rem 0 1.2rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid var(--line);
+    font-size: 1.85rem;
+  }
+
+  .prose :global(h3) {
+    margin: 2.6rem 0 0.9rem;
+    font-size: 1.35rem;
+  }
+
+  .prose :global(p),
+  .prose :global(ul),
+  .prose :global(ol) {
+    margin: 1.2rem 0;
+  }
+
+  .prose :global(a) {
+    color: var(--accent);
+  }
+
+  .prose :global(strong) {
+    color: var(--text);
+  }
+
+  .prose :global(blockquote) {
+    margin: 2rem 0;
+    padding: 0.8rem 0 0.8rem 1.4rem;
+    color: var(--muted);
+    border-left: 3px solid var(--accent);
+  }
+
+  .prose :global(blockquote p) {
+    margin: 0;
+  }
+
+  .prose :global(code) {
+    padding: 0.12em 0.35em;
+    color: var(--accent-strong);
+    background: var(--accent-soft);
+    border-radius: 0.25rem;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 0.9em;
+  }
+
+  .prose :global(pre) {
+    margin: 2rem 0;
+    padding: 1.25rem;
+    overflow-x: auto;
+    background: var(--code) !important;
+    border: 1px solid var(--line);
+    border-radius: 0.65rem;
+    line-height: 1.65;
+  }
+
+  .prose :global(pre code) {
+    padding: 0;
+    color: inherit;
+    background: none;
+  }
+
+  .prose :global(table) {
+    display: block;
+    width: 100%;
+    margin: 2rem 0;
+    overflow-x: auto;
+    border-collapse: collapse;
+  }
+
+  .prose :global(th),
+  .prose :global(td) {
+    min-width: 8rem;
+    padding: 0.7rem 0.8rem;
+    border: 1px solid var(--line);
+    text-align: left;
+  }
+
+  .prose :global(th) {
+    background: var(--surface-soft);
+  }
+
+  .prose :global(img) {
+    height: auto;
+    margin: 2.5rem auto;
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+  }
+
+  .prose :global(hr) {
+    margin: 3rem 0;
+    border: 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .post-nav {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    max-width: calc(var(--reading) + 8rem);
+    margin-top: 6rem;
+  }
+
+  .post-nav a {
+    display: flex;
+    min-height: 8rem;
+    padding: 1.25rem;
+    flex-direction: column;
+    justify-content: center;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+    text-decoration: none;
+  }
+
+  .post-nav a:hover {
+    border-color: var(--accent);
+  }
+
+  .post-nav a.next {
+    text-align: right;
+  }
+
+  .post-nav span {
+    color: var(--faint);
+    font-size: 0.75rem;
+  }
+
+  .post-nav strong {
+    margin-top: 0.35rem;
+    line-height: 1.45;
+  }
+
+  @media (max-width: 1000px) {
+    .article-shell {
+      grid-template-columns: minmax(0, var(--reading));
+    }
+
+    .article-rail,
+    .desktop-toc {
+      display: none;
+    }
+
+    .mobile-toc {
+      display: block;
+    }
+  }
+
+  @media (max-width: 600px) {
+    .article-header {
+      padding-top: 4.5rem;
+      padding-bottom: 3rem;
+      text-align: left;
+    }
+
+    .article-meta,
+    .article-header .tag-row {
+      justify-content: flex-start;
+    }
+
+    .article-header h1 {
+      font-size: clamp(2.5rem, 13vw, 3.6rem);
+    }
+
+    .prose {
+      font-size: 1rem;
+    }
+
+    .post-nav {
+      grid-template-columns: 1fr;
+    }
+
+    .post-nav a.next {
+      text-align: left;
+    }
+  }
+</style>
