@@ -377,6 +377,17 @@ const paperMeta = [post.data.venue, post.data.paperYear].filter(Boolean).join(' 
     background: none;
   }
 
+  .prose :global(.katex-display) {
+    max-width: 100%;
+    padding: 0.35rem 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .prose :global(.katex-display > .katex) {
+    min-width: max-content;
+  }
+
   .prose :global(table) {
     display: block;
     width: 100%;
