@@ -42,7 +42,7 @@ isExample: false
 
 On-Policy Distillation（OPD）把监督位置换到了学生自己访问的状态：先由学生生成 rollout，再让教师对每个学生前缀给出逐 token 概率。这样既能缓解 exposure bias，又能获得比 outcome reward 更稠密的监督。
 
-但论文指出，OPD 仍有一个此前没有被解释清楚的失败模式：**更大、benchmark 分数更高的教师，可能完全不能提升学生；相反，一个更弱但分布更兼容的教师反而能教得更好。** 因此，教师“知道得多”与学生“学得会”不是同一件事。[论文：PDF pp. 2, 5–8]
+但更大或 benchmark 分数更高的教师，并不保证带来更好的蒸馏结果。论文因此把两个问题分开考察：教师是否具备学生未掌握的能力，以及学生当前的分布能否利用教师信号。[论文：PDF pp. 2, 5–8]
 
 ### 三种常见 OPD 实现也各有代价
 
@@ -60,7 +60,7 @@ On-Policy Distillation（OPD）把监督位置换到了学生自己访问的状�
 
 所以，这篇论文真正追问的不是“OPD 能不能工作”，而是：
 
-> **学生现在只会做自己熟悉的那几道题。老师把每道题“每个选项该打几分”的完整答案都给了它。那么在学生熟悉的这几道题上，老师这份详细答案什么时候真能帮学生提高？如果帮不上，是因为老师自己水平不行、是因为老师想教的东西学生根本碰不到、还是因为学生学习的方法（怎么用这份答案）有问题？**
+> **学生只会做自己熟悉的题。老师即使给出每个选项的完整评分，这些信息何时才能让学生进步？如果无效，问题出在教师能力、师生分布不兼容，还是训练方法没有利用好这些信息？**
 
 ## 2. 文章的方法：从目标函数到 token 级机制
 
@@ -116,62 +116,36 @@ $$
 
 值越高，说明学生越接近教师的高概率 support region；低值表示两者存在明显 mode mismatch。[论文：PDF p. 4，Eq. 6]
 
-**2）Overlap-Token Advantage：共享 Token 内的概率是否一致。**
+**2）Overlap-Token Advantage：共享 token 内的概率是否一致。**
 
-**设计目的：** Teacher 和 Student 即使选中了相同的 Token，也不代表它们分配的概率相同。因此，作者先取双方 Top-k Token 的交集，并在交集内重新归一化，得到 $\bar p_t$（Student）和 $\bar q_t$（Teacher），比较双方对共享 Token 的概率分配是否一致。
-
-### ① 单个 Token 的指标：$A_t(v)$
+令 $C_t=S_t^{(p)}\cap S_t^{(q)}$。在 $C_t\neq\varnothing$ 的位置，把师生分布限制在 $C_t$ 内重新归一化为 $\bar p_t$ 与 $\bar q_t$。对任一共享 token $v$，定义：
 
 $$
 A_t(v)=\bar p_t(v)
 \bigl(\log\bar q_t(v)-\log\bar p_t(v)\bigr)
 $$
 
-**设计思路：** 先计算 Teacher 与 Student 对某个 Token 的对数概率差异，再乘以 Student 的概率，表示该 Token 对整体差异的贡献。
-
-**单个 Token 的数值含义：**
+它用学生概率加权师生的对数概率差，表示该 token 对整体分布差异的贡献：
 
 | $A_t(v)$ | 概率关系 | 说明 |
 |---|---|---|
-| 正数 | $\bar q_t(v)>\bar p_t(v)$ | Teacher 概率更高，Student 相对低估该 Token |
-| 负数 | $\bar p_t(v)>\bar q_t(v)$ | Student 概率更高，Student 相对高估该 Token |
-| 等于 0 | $\bar p_t(v)=\bar q_t(v)$ | 双方对该 Token 的概率一致 |
+| 正数 | $\bar q_t(v)>\bar p_t(v)$ | 学生相对低估该 token |
+| 负数 | $\bar p_t(v)>\bar q_t(v)$ | 学生相对高估该 token |
+| 0 | $\bar p_t(v)=\bar q_t(v)$ | 双方概率一致 |
 
-**注意：** 单个 $A_t(v)$ 可以为正，也可以为负，用来判断 Student 对某个共享 Token 是相对高估还是低估。
-
-### ② 整体指标：$\mathcal M_{\mathrm{adv}}$
+再对共享 token 和生成位置求平均：
 
 $$
 \mathcal M_{\mathrm{adv}}
 =\mathbb E_t\left[
-\frac{1}{|S_t^{(p)}\cap S_t^{(q)}|}
-\sum_{v\in S_t^{(p)}\cap S_t^{(q)}}A_t(v)
+\frac{1}{|C_t|}
+\sum_{v\in C_t}A_t(v)
 \right]
 $$
 
-**设计思路：**
+由于 $\sum_{v\in C_t}A_t(v)=-D_{\mathrm{KL}}(\bar p_t\Vert\bar q_t)\leq 0$，所以 $\mathcal M_{\mathrm{adv}}$ 越接近 0，师生在共享集合内的概率分配越一致；越负，平均每个共享 token 的分布差异越大。单个 $A_t(v)$ 可以为正或负，但聚合指标不会大于 0。
 
-- $\sum A_t(v)$：将所有共享 Token 的贡献相加，等于**负的 Reverse KL**，衡量共享集合内部的整体概率分布差异。
-- $\frac{1}{|S_t^{(p)}\cap S_t^{(q)}|}$：除以交集大小，计算每个共享 Token 的平均贡献。
-- $\mathbb E_t$：对不同生成位置求平均，得到整体指标。
-
-**整体指标的数值含义：**
-
-| $\mathcal M_{\mathrm{adv}}$ | 说明 |
-|---|---|
-| 等于 0 | 共享集合内 Teacher 和 Student 的概率分布完全一致 |
-| 接近 0（如 -0.01） | 共享集合内的概率分配差异较小 |
-| 负值较大（如 -0.5） | 共享集合内的概率分配差异较大 |
-| 大于 0 | 理论上不可能（按上述定义且交集非空） |
-
-**注意：** 整体指标为负，并不代表 Student 对所有 Token 都过度自信，而是说明双方概率分布存在差异。因为有的 Token 被高估，有的被低估，汇总后等于负的 Reverse KL，因此整体指标始终小于或等于 0。
-
-### 总结
-
-- **单个 $A_t(v)$：** 看 Student 对某个共享 Token 是高估还是低估，通过正负号判断。
-- **整体 $\mathcal M_{\mathrm{adv}}$：** 看 Student 和 Teacher 在共享 Token 内的概率分布有多一致，越接近 0 越一致，越负则差异越大。
-
-**局限性：** 整体指标会受到交集大小的影响。如果交集只有一个 Token，重新归一化后指标必然为 0，即使原始概率不同。因此，需要结合交集大小和 Token 重合率一起分析。
+**局限性：** 该指标必须与 overlap ratio 一起看。若交集只有一个 token，重归一化后 $\mathcal M_{\mathrm{adv}}$ 必然为 0，即使双方的原始概率不同。
 
 [论文：PDF p. 5，Eq. 7]
 
@@ -185,17 +159,12 @@ $$
 
 ### 2.3 方法的完整逻辑
 
-论文先用对照实验和 reverse distillation 识别两个成功条件：
-
-1. **Thinking-pattern consistency**：学生和教师的局部高概率分布必须兼容；
-2. **Genuinely new capabilities**：教师必须提供学生训练中尚未见过的能力，不能只是规模更大或分数更高。
-
-随后，论文在 token 层面比较成功与失败 run，并做 overlap-only / non-overlap-only 干预。最后给出两条恢复 recipe：
+论文先通过教师对照与 reverse distillation 识别 OPD 的两个成功条件（局部分布兼容、教师提供新能力），再用 overlap ratio、overlap-token advantage 和 entropy gap 跟踪训练动态，并通过 overlap-only / non-overlap-only 干预定位主要优化区域。最后，作者从模型初始化和数据选择两侧给出两条恢复 recipe：
 
 - **Off-policy cold start**：先用教师生成的 rollout 对学生做一段 SFT，再切换到 OPD；
 - **Teacher-aligned prompt selection**：使用与教师 post-training 更一致的 prompt 模板或内容进行 OPD。
 
-前者从模型初始化侧缩小分布差距，后者从数据侧让学生更常访问教师熟悉的状态。[论文：PDF pp. 5–14]
+[论文：PDF pp. 5–14]
 
 ## 3. 本文解决了什么问题，为什么这些方法有效？
 
@@ -203,7 +172,11 @@ $$
 
 **第一，解释“强教师为什么也会教不会”。**
 
-[论文] 教师的参数规模或 benchmark 分数不是 OPD 可学性的充分条件。若师生 thinking pattern 不兼容，学生一开始就很少访问教师支持的高概率区域，后续训练也难以追回早期损失；若教师与学生来自同一训练 pipeline、没有额外新能力，即使分数更高，也可能没有新的可迁移信息。[论文：PDF pp. 5–8，Figs. 2–5]
+> **图 2–3 的反常现象：** 同一个 Qwen3-1.7B-Base 学生分别向 Qwen3-4B-Base-GRPO 与 Qwen3-4B (Non-thinking) 学习。GRPO 教师自身的 benchmark 并非全面更高，它只在 AIME 2025 上领先，在 AIME 2024 和 AMC 2023 上反而更低；但它的初始 overlap ratio 更高，蒸馏后学生的验证准确率也始终更高。后期两组 overlap 虽趋同，性能差距仍未追回。[论文：PDF p. 6，Figs. 2–3]
+
+[论文] 这说明 OPD 更依赖训练初期的 thinking-pattern compatibility，而不是教师分数本身；早期错配造成的收益损失可能难以弥补。
+
+[论文] 这仍不是唯一条件。若教师与学生来自同一训练 pipeline、没有额外新能力，即使分数更高，也可能没有新的可迁移信息。[论文：PDF pp. 7–8，Figs. 4–5]
 
 **第二，定位 OPD 真正起作用的 token 区域。**
 
@@ -221,7 +194,7 @@ $$
 
 可以把论文的核心机制压缩为：
 
-[论文 + 分析] 论文实验证明了序列层面的全局信号仍有信息、局部训练却可能失败；“不同位置的梯度方向不一致并相互抵消”是作者尚未验证的解释性假设。
+[论文] 失败教师的序列级信号仍能区分正确与错误 rollout，因此 OPD 失败不等于教师完全没有信息。[分析] 论文尚未直接验证的是：这些信号是否因不同 token 位置的梯度方向不一致而相互抵消。
 
 ```text
 thinking pattern 不兼容
@@ -243,17 +216,16 @@ thinking pattern 不兼容
 
 [分析] 因此，OPD 的主要作用不是把学生突然拉向它此前完全不考虑的 token，而是在学生已经能够访问、师生共同认可的高概率候选中重新分配概率。这也解释了为什么初始分布兼容性如此重要。[论文：PDF pp. 9–11]
 
-### 3.3 关键证据如何闭环
+### 3.3 其余关键证据
 
 | 结论 | 关键证据 | 能支持什么 |
 |---|---|---|
-| Thinking pattern 比教师分数更关键 | Qwen 对照中，GRPO 教师的初始 overlap 更高，蒸馏效果更好；教师自身 benchmark 并非全面更高 | 教师分数不能单独预测 OPD 成败 |
 | 新能力比单纯规模更关键 | DeepSeek 家族的 gap recovery 为 16.9% vs. 5.3%；Qwen 家族为 58.6% vs. 15.6%，额外 RL 教师更可迁移 | 教师需要学生未见的新能力，而非只是更大 |
 | OPD 会学习教师的局部分布 | Reverse distillation 中，1.5B 与 7B 同家族教师把学生拉回近似相同水平 | 同家族不同规模教师在学生访问状态上可能局部分布近似 |
 | 共享高概率 token 是主要作用位置 | Overlap-only 几乎匹配 Student Top-$k$，non-overlap 显著更弱 | overlap 区域具有干预意义，不只是相关性 |
 | 全局有信息不等于局部可优化 | 成功和失败教师区分正确/错误 rollout 的 AUROC 分别约 0.73、0.75 | 失败不能简单归因于全局 reward 质量更差 |
 
-[论文：PDF pp. 6–10, 16，Figs. 2–7, 14]
+[论文：PDF pp. 7–10, 16，Figs. 4–7, 14]
 
 这里仍要保留一个边界：两条 recipe 主要修复 **thinking-pattern gap**，不能凭空给教师创造“新知识”。如果教师没有学生尚未获得的能力，分布对齐本身仍不足以产生显著增益。
 
