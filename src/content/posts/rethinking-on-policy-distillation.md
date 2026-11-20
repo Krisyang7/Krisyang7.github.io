@@ -48,15 +48,19 @@ On-Policy Distillation（OPD）把监督位置换到了学生自己访问的状�
 
 | 方法 | 做法 | 优点 | 局限 |
 |---|---|---|---|
-| Sampled-Token OPD | 每个位置只使用学生实际采样的 token | 计算最轻；是 token-level reverse KL 的无偏单样本估计 | 单步信号稀疏，但跨训练可覆盖高概率区域；不能与固定取 argmax 的 Top-1 混为一谈 |
+| Sampled-Token OPD | 每个位置只使用学生实际采样的 token | 计算最轻；是 token-level reverse KL 的无偏单样本估计 | 单次监督不全面，低概率 token 的修正较慢；详见下方补充笔记 |
 | Full-Vocabulary OPD | 每个位置计算全词表 KL | 监督最完整、梯度最密 | 内存开销为 $O(BTM)$，随 batch、长度和词表规模增长 |
 | Top-$k$ OPD | 只在学生的 top-$k$ token 上计算重归一化 KL | 保留多 token 监督，同时降低教师查询成本 | 丢弃集合外概率质量，只是 full-vocabulary KL 的近似 |
 
-[论文：PDF pp. 3–4, 17，Eqs. 3–5，Figs. 15–16]
+**我的补充笔记：Sampled-Token OPD 的局限**
+
+1. **监督信号不全面：** 单次采样只提供一个 Token 的误差信息，无法直接指导 Student 应该提高哪些 Token 的概率、降低哪些 Token 的概率，缺少完整的相对调整信息。
+2. **低概率 Token 难以纠正：** 例如 Teacher 给“香蕉”35%，Student 仅给 5%，那么 Student 采到“香蕉”的概率很低，导致相关监督信号出现频率低、修正缓慢，需要更多采样才能充分学习。
+
 
 所以，这篇论文真正追问的不是“OPD 能不能工作”，而是：
 
-> **在学生当前策略附近，教师的稠密 token 信号何时是可利用的？失败究竟来自教师不够强、师生分布不兼容，还是优化信号本身有问题？**
+> **学生现在只会做自己熟悉的那几道题。老师把每道题“每个选项该打几分”的完整答案都给了它。那么在学生熟悉的这几道题上，老师这份详细答案什么时候真能帮学生提高？如果帮不上，是因为老师自己水平不行、是因为老师想教的东西学生根本碰不到、还是因为学生学习的方法（怎么用这份答案）有问题？**
 
 ## 2. 文章的方法：从目标函数到 token 级机制
 
@@ -72,17 +76,7 @@ $$
 
 其中 $p_t$ 是学生的 next-token 分布，$q_t$ 是教师在**同一个学生前缀**上的分布。
 
-标准 OPD 最小化学生到教师的 reverse KL：
-
-$$
-\mathcal L_{\mathrm{OPD}}(\theta)
-=\mathbb E_{x\sim\mathcal D_x}
-D_{\mathrm{KL}}\!\left(
-\pi_\theta(\cdot\mid x)\,\Vert\,\pi_T(\cdot\mid x)
-\right).
-$$
-
-利用自回归分解，它可以精确写成学生访问状态上的 token-level KL：
+标准 OPD 最小化学生到教师的 reverse KL 再利用自回归分解，它可以精确写成学生访问状态上的 token-level KL：
 
 $$
 \mathcal L_{\mathrm{OPD}}(\theta)
@@ -92,7 +86,6 @@ $$
 \right].
 $$
 
-这两式的关键不是 KL 本身，而是 KL 在哪里被计算：**不是教师轨迹，而是学生自己生成的前缀。** [论文：PDF p. 3，Eqs. 1–2]
 
 Top-$k$ OPD 取学生高概率集合 $S_t=\operatorname{TopK}(p_t,k)$，先在集合内重归一化：
 
@@ -123,24 +116,64 @@ $$
 
 值越高，说明学生越接近教师的高概率 support region；低值表示两者存在明显 mode mismatch。[论文：PDF p. 4，Eq. 6]
 
-**2）Overlap-Token Advantage：共享 token 内的概率是否校准。**
+**2）Overlap-Token Advantage：共享 Token 内的概率是否一致。**
 
-在交集上重归一化 $\bar p_t,\bar q_t$，定义
+**设计目的：** Teacher 和 Student 即使选中了相同的 Token，也不代表它们分配的概率相同。因此，作者先取双方 Top-k Token 的交集，并在交集内重新归一化，得到 $\bar p_t$（Student）和 $\bar q_t$（Teacher），比较双方对共享 Token 的概率分配是否一致。
+
+### ① 单个 Token 的指标：$A_t(v)$
 
 $$
 A_t(v)=\bar p_t(v)
-\bigl(\log\bar q_t(v)-\log\bar p_t(v)\bigr),
+\bigl(\log\bar q_t(v)-\log\bar p_t(v)\bigr)
 $$
+
+**设计思路：** 先计算 Teacher 与 Student 对某个 Token 的对数概率差异，再乘以 Student 的概率，表示该 Token 对整体差异的贡献。
+
+**单个 Token 的数值含义：**
+
+| $A_t(v)$ | 概率关系 | 说明 |
+|---|---|---|
+| 正数 | $\bar q_t(v)>\bar p_t(v)$ | Teacher 概率更高，Student 相对低估该 Token |
+| 负数 | $\bar p_t(v)>\bar q_t(v)$ | Student 概率更高，Student 相对高估该 Token |
+| 等于 0 | $\bar p_t(v)=\bar q_t(v)$ | 双方对该 Token 的概率一致 |
+
+**注意：** 单个 $A_t(v)$ 可以为正，也可以为负，用来判断 Student 对某个共享 Token 是相对高估还是低估。
+
+### ② 整体指标：$\mathcal M_{\mathrm{adv}}$
 
 $$
 \mathcal M_{\mathrm{adv}}
 =\mathbb E_t\left[
 \frac{1}{|S_t^{(p)}\cap S_t^{(q)}|}
 \sum_{v\in S_t^{(p)}\cap S_t^{(q)}}A_t(v)
-\right].
+\right]
 $$
 
-它趋近 0，表示学生正在把概率分配调整到教师偏好的共享 token 上；较大的负值表示学生相对教师过度自信。[论文：PDF p. 5，Eq. 7]
+**设计思路：**
+
+- $\sum A_t(v)$：将所有共享 Token 的贡献相加，等于**负的 Reverse KL**，衡量共享集合内部的整体概率分布差异。
+- $\frac{1}{|S_t^{(p)}\cap S_t^{(q)}|}$：除以交集大小，计算每个共享 Token 的平均贡献。
+- $\mathbb E_t$：对不同生成位置求平均，得到整体指标。
+
+**整体指标的数值含义：**
+
+| $\mathcal M_{\mathrm{adv}}$ | 说明 |
+|---|---|
+| 等于 0 | 共享集合内 Teacher 和 Student 的概率分布完全一致 |
+| 接近 0（如 -0.01） | 共享集合内的概率分配差异较小 |
+| 负值较大（如 -0.5） | 共享集合内的概率分配差异较大 |
+| 大于 0 | 理论上不可能（按上述定义且交集非空） |
+
+**注意：** 整体指标为负，并不代表 Student 对所有 Token 都过度自信，而是说明双方概率分布存在差异。因为有的 Token 被高估，有的被低估，汇总后等于负的 Reverse KL，因此整体指标始终小于或等于 0。
+
+### 总结
+
+- **单个 $A_t(v)$：** 看 Student 对某个共享 Token 是高估还是低估，通过正负号判断。
+- **整体 $\mathcal M_{\mathrm{adv}}$：** 看 Student 和 Teacher 在共享 Token 内的概率分布有多一致，越接近 0 越一致，越负则差异越大。
+
+**局限性：** 整体指标会受到交集大小的影响。如果交集只有一个 Token，重新归一化后指标必然为 0，即使原始概率不同。因此，需要结合交集大小和 Token 重合率一起分析。
+
+[论文：PDF p. 5，Eq. 7]
 
 **3）Entropy Gap：师生置信度结构是否一致。**
 
