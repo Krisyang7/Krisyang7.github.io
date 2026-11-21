@@ -64,7 +64,7 @@ On-Policy Distillation（OPD）把监督位置换到了学生自己访问的状�
 
 ## 2. 实验发现：什么决定 OPD 是否有效？
 
-本章用三组对照回答三个问题：Teacher 自身分数更高是否一定更适合蒸馏？较高的师生兼容性是否已经足够？OPD 最终把什么迁移给了 Student？
+这一章想弄清楚三件事：Teacher 自己考得好，是否就更会教？师生一开始的思路接近，是否就一定能学好？OPD 最终会把 Student 拉向什么方向？
 
 ### 2.1 Teacher 自身不更强，为什么反而蒸馏得更好？
 
@@ -74,9 +74,9 @@ On-Policy Distillation（OPD）把监督位置换到了学生自己访问的状�
 
 ![论文 Figure 3：两位 Teacher 的原始测试准确率](opd_figures/figure3-teacher-benchmark.png)
 
-*Figure 3（论文第 6 页）：两位 Teacher 在 AIME 2024、AIME 2025 和 AMC 2023 上的原始准确率。*
+*Figure 3（论文第 6 页）：两位 Teacher 在 AIME 2024、AIME 2025 和 AMC 2023 三个测试集上的原始准确率。*
 
-**比较指标。** Accuracy（avg@16）表示每道题采样 16 个回答后的平均正确率；Figure 3 分别报告三个 benchmark 的结果。
+**比较指标。** avg@16 可以简单理解为：同一道题让模型回答 16 次，再计算平均正确率。Figure 3 分别报告三个测试集的结果。
 
 **图中现象。** GRPO Teacher 在 AIME 2024 和 AMC 2023 上更低，只在 AIME 2025 上更高，三项平均也略低。因此，后续蒸馏优势不能归因于 GRPO Teacher 自身分数更高。
 
@@ -86,17 +86,17 @@ On-Policy Distillation（OPD）把监督位置换到了学生自己访问的状�
 
 *Figure 2（论文第 6 页）：紫线使用 GRPO Teacher，橙线使用 Non-thinking Teacher。*
 
-**比较指标。** 左图是 Student 的平均验证准确率（avg@16），虚线表示对应 Teacher 的准确率；右图是 Overlap Ratio，即师生 top-$k$ 高概率 token 的重合比例，越高表示两者在 Student 当前状态上的局部预测分布越兼容。
+**比较指标。** 左图是 Student 的平均验证准确率（avg@16），虚线表示对应 Teacher 的准确率。右图的 Overlap Ratio 表示师生最看好的 top-$k$ 个 token 中有多少相同，可以把它理解为两者当前的解题思路有多接近。
 
 **图中现象。** GRPO Teacher 自身并不更强，但用它蒸馏的 Student 始终取得更高准确率，同时师生初始 Overlap Ratio 也更高。虽然两组 Overlap Ratio 在后期逐渐接近，Student 的性能差距仍然存在。
 
-> **实验说明的问题：Teacher 自身 benchmark 分数不能单独预测 OPD 效果。在这组对照中，更高的初始师生兼容性对应更好的蒸馏结果，且早期错配造成的损失可能难以后期追回；但图 2–3 不能证明兼容性是唯一原因。**
+> **这个实验说明：Teacher 自己考分高，不代表更会教这个 Student。训练刚开始时，师生的思路越接近，Student 越容易用上 Teacher 给出的信息；如果一开始差得太远，后面即使 Overlap Ratio 追上来，前面丢掉的收益也可能补不回来。不过，这组实验只能说明“思路接近”和“学得更好”同时出现，不能证明它是唯一原因。**
 
 [论文：PDF p. 6，Figs. 2–3]
 
 ### 2.2 兼容性还不够：Teacher 还需要提供新能力
 
-**Figure 4 的意义：检验兼容性之外，Teacher 是否还需要提供新的可迁移能力。**
+**Figure 4 的意义：在师生已经比较“合拍”的情况下，进一步检查 Teacher 是否还要有 Student 没学过的新能力。**
 
 ![论文 Figure 4：额外 RL Teacher 与同流水线 Teacher 的 OPD 效果](opd_figures/figure4-rl-capability-transfer.png)
 
@@ -106,9 +106,9 @@ On-Policy Distillation（OPD）把监督位置换到了学生自己访问的状�
 
 **比较指标。**
 
-- **Accuracy（avg@16）**：每道题采样 16 个回答后的平均正确率；图中曲线进一步汇总了三个 benchmark，用于衡量 Student 的实际表现。
-- **Initial Overlap Ratio**：训练开始前的师生 top-$k$ token 重合比例，用于衡量初始兼容性。
-- **Gap Recovery Rate**：Teacher–Student 初始 benchmark 性能差距被 OPD 弥补的比例：
+- **Accuracy（avg@16）**：Student 实际做题的平均正确率；图中曲线汇总了三个测试集。
+- **Initial Overlap Ratio**：训练开始时，师生最看好的 token 有多少相同。它回答的是“两者是否容易对上思路”。
+- **Gap Recovery Rate**：Teacher 原本比 Student 高出的那段分数，Student 通过 OPD 追回了多少：
 
 $$
 \text{Gap Recovery Rate}
@@ -116,7 +116,7 @@ $$
 {\mathrm{Acc}_{\text{Teacher}}-\mathrm{Acc}_{\text{before OPD}}}.
 $$
 
-0% 表示没有缩小差距，100% 表示完全追平 Teacher。
+0% 表示 Student 完全没有追近 Teacher，100% 表示原来的性能差距被全部追回。
 
 | 模型家族 | Teacher 类型 | Initial Overlap Ratio | Gap Recovery Rate |
 |---|---|---:|---:|
@@ -127,35 +127,35 @@ $$
 
 **图中现象。** 两个额外 RL Teacher 的初始 Overlap Ratio 都略低，但 Student 的 avg@16 曲线和 Gap Recovery Rate 都明显更高。
 
-> **实验说明的问题：Initial Overlap Ratio 只衡量兼容性，不能衡量可迁移增量。有效 OPD 既需要 Teacher 与 Student 足够兼容，也需要 Teacher 提供 Student 尚未掌握的新能力。结果支持额外 RL 是这种新能力的重要来源，但不能证明它是唯一原因。**
+> **这个实验说明：师生“对得上思路”只是 Student 能听懂 Teacher 的前提，不代表 Teacher 一定有新东西可教。想让 OPD 真正带来提升，Teacher 还要提供 Student 原本不会的能力。两个模型家族的结果都支持额外 RL 能带来这类新能力，但不能说明 RL 是唯一来源。**
 
 [论文：PDF pp. 6–7，Fig. 4]
 
 ### 2.3 更大、更高分的 Teacher，为什么仍会让 Student 退化？
 
-**Figure 5 的意义：用逆向蒸馏检验 OPD 会保留 Student 的 RL 增益，还是把 Student 拉向 Teacher 的模式。**
+**Figure 5 的意义：检查 OPD 会保留 Student 后来通过 RL 学到的能力，还是会按照 Teacher 的方向把这些能力改掉。**
 
 ![论文 Figure 5：同家族 Teacher 对 JustRL-1.5B 的逆向蒸馏](opd_figures/figure5-reverse-distillation.png)
 
 *Figure 5（论文第 8 页）：Student 为 JustRL-1.5B；紫线和橙线分别使用 R1-Distill-1.5B 与 R1-Distill-7B 作为 Teacher。*
 
-JustRL-1.5B 由 R1-Distill-1.5B 继续 RL 得到。论文反过来使用它的 pre-RL checkpoint 和同家族更大的 7B 模型作为 Teacher；两位 Teacher 都没有经历产生 JustRL-1.5B 的这段后续 RL 训练。
+JustRL-1.5B 由 R1-Distill-1.5B 继续 RL 得到。论文反过来使用它的 RL 前版本和同家族更大的 7B 模型作为 Teacher；两位 Teacher 都没有经历产生 JustRL-1.5B 的这段后续 RL 训练。
 
-**比较指标。** 横轴为训练步数，纵轴为 AIME 2024、AIME 2025 和 AMC 2023 上的 avg@16；紫、橙曲线表示 Student 的训练表现，横向虚线表示对应 Teacher 的准确率。
+**比较指标。** 横轴是训练步数，纵轴是三个测试集上的 avg@16。紫、橙曲线表示 Student 在训练中的准确率，横向虚线表示对应 Teacher 自己的准确率。
 
-**图中现象。** 两条曲线都从 JustRL-1.5B 的初始水平快速下降，并在三个 benchmark 上收敛到近似的较低水平。R1-Distill-7B 的分数略高于当前 Student，R1-Distill-1.5B 则明显更弱，但两位 Teacher 最终造成了几乎相同的退化。
+**图中现象。** 两条曲线都从 JustRL-1.5B 的初始水平快速下降，最后停在近似的较低水平。R1-Distill-7B 的分数略高于当前 Student，R1-Distill-1.5B 则明显更弱，但两位 Teacher 最终都把 Student 往回拉了几乎同样的幅度。
 
-> **实验说明的问题：OPD 会把 Student 推向 Teacher 在 Student 访问状态上的局部目标分布。当 Teacher 没有提供新的可迁移能力时，更大的规模或更高的分数仍可能抹去 Student 的 RL 增益。两条训练轨迹近似只说明局部目标可能接近，不能据此断言两位 Teacher 的全局分布完全相同。**
+> **这个实验说明：OPD 不会自动让 Student 变强，它做的事情是让 Student 的输出越来越像 Teacher。如果 Teacher 没有 Student 当前缺少的新能力，Student 反而可能被往回拉，丢掉后来通过 RL 得到的提升。1.5B 和 7B Teacher 带来了几乎相同的退化，只能说明它们在这些训练步骤上给出的方向很接近，不能说明两个模型整体完全相同。**
 
 [论文：PDF pp. 7–8，Fig. 5]
 
-### 2.4 本章发现的问题
+### 2.4 用人话总结：三组实验到底发现了什么？
 
-| 实验证据 | 直接观察 | 发现的问题 |
+| 图 | 看到的现象 | 最容易记住的结论 |
 |---|---|---|
-| Figures 2–3 | GRPO Teacher 自身并不更强，但蒸馏出的 Student 更好，且初始 Overlap Ratio 更高 | **Teacher 分数不能单独预测 OPD 效果；初始师生兼容性很重要** |
-| Figure 4 | 额外 RL Teacher 的初始 Overlap Ratio 略低，但 avg@16 与 Gap Recovery Rate 更高 | **兼容性不是充分条件；Teacher 还需提供新的可迁移能力** |
-| Figure 5 | 1.5B 与更大、更高分的 7B Teacher 都让 Student 出现近似退化 | **规模和高分不等于新知识；OPD 还可能抹去 Student 的 RL 增益** |
+| Figures 2–3 | GRPO Teacher 自己分数不更高，却教出了更好的 Student | **老师自己考得好，不代表更会教这个 Student；训练开始时能否对上思路很重要** |
+| Figure 4 | 额外 RL Teacher 的初始 Overlap 略低，却带来了更高的 Student 准确率和 Gap Recovery Rate | **能对上思路只是前提，Teacher 还得有 Student 没学过的东西** |
+| Figure 5 | 1.5B 和更高分的 7B Teacher 都把 Student 拉到了近似的较低水平 | **OPD 不是只增不减；Teacher 没有新东西可教时，也可能把 Student 已有的 RL 提升带丢** |
 
 ## 3. 文章的方法：从目标函数到 token 级机制
 
