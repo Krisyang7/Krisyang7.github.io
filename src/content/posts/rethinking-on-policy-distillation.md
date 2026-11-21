@@ -84,7 +84,50 @@ Figure 2 右图进一步给出解释线索：GRPO Teacher 与 Student 的初始 
 
 虽然两组 overlap 在训练后期逐渐接近，但左图中的 Student 性能差距仍然存在。作者据此认为，训练早期的思考模式错配会损失蒸馏收益，而且这种损失后期难以追回。
 
-> **第一个发现：** OPD Teacher 的选择不能只看 Teacher 自身准确率，还要看它与 Student 的初始 thinking-pattern compatibility。图 2–3 支持这一解释，但不能证明兼容性是唯一原因或充分条件；论文随后还指出，Teacher 是否提供 Student 尚未掌握的新知识同样重要。[论文：PDF p. 6，Figs. 2–3]
+> **第一个发现：** OPD Teacher 的选择不能只看 Teacher 自身准确率，还要看它与 Student 的初始 thinking-pattern compatibility。图 2–3 支持这一解释，但兼容性是否足以保证 OPD 成功，还需要下一组对照检验。[论文：PDF p. 6，Figs. 2–3]
+
+### 2.2 仅有兼容性还不够：Teacher 还需要提供新的可迁移能力
+
+![论文 Figure 4：额外 RL Teacher 与同流水线 Teacher 的 OPD 效果](opd_figures/figure4-rl-capability-transfer.png)
+
+*Figure 4（论文第 7 页）：左图为 DeepSeek 家族，右图为 Qwen 家族。紫线表示经过额外 RL 的 Teacher，橙线表示同训练流水线的 Teacher；曲线为 Student 的 avg@16，框内给出 Initial Overlap Ratio 与 Gap Recovery Rate。*
+
+为区分“Teacher 自身表现更强”和“Teacher 的能力能否迁移给 Student”，论文在两个模型家族内固定 Student、OPD 数据和训练配置，只改变 Teacher：
+
+- **DeepSeek 家族：** 对比 DeepSeek-R1-Distill-Qwen-7B 与在其基础上继续 RL 得到的 Skywork-OR1-Math-7B；
+- **Qwen 家族：** 对比 Qwen3-4B（Non-thinking）与在其基础上继续数学 RL 得到的 Qwen3-4B-Non-Thinking-RL-Math。
+
+图中需要区分三项指标：
+
+1. **Accuracy（avg@16）——Student 最终学得怎么样。** 每道题采样 16 个回答，再计算平均正确率。曲线直接反映 Student 在 OPD 训练中的绝对性能变化。
+2. **Gap Recovery Rate——Teacher 的能力实际传递了多少。** 它衡量 Student 通过 OPD 弥补了多少初始师生性能差距：
+
+$$
+\text{Gap Recovery Rate}
+=\frac{\mathrm{Acc}_{\text{after OPD}}-\mathrm{Acc}_{\text{before OPD}}}
+{\mathrm{Acc}_{\text{Teacher}}-\mathrm{Acc}_{\text{before OPD}}}.
+$$
+
+0% 表示没有缩小差距，100% 表示完全追平 Teacher。相比只看 Teacher 的绝对分数，该指标更直接地衡量 Teacher 的能力是否真正迁移给了 Student。
+
+3. **Initial Overlap Ratio——训练开始时师生是否兼容。** 它表示 OPD 前师生 top-$k$ 高概率 token 的重合比例，是兼容性诊断指标，不等同于知识迁移量。
+
+| 模型家族 | Teacher 类型 | Initial Overlap Ratio | Gap Recovery Rate |
+|---|---|---:|---:|
+| DeepSeek | 同流水线 Teacher | 74.7% | 5.3% |
+| DeepSeek | 额外 RL Teacher | 71.5% | 16.9% |
+| Qwen | 同流水线 Teacher | 75.7% | 15.6% |
+| Qwen | 额外 RL Teacher | 70.3% | 58.6% |
+
+**Teacher 分数更高，不代表一定能传递更多知识。** Teacher 的 benchmark 分数描述其自身能力，而 Gap Recovery Rate 才描述这些能力有多少转化成了 Student 的收益。如果 Teacher 只是把 Student 已见过的能力执行得更好，可迁移增量仍可能有限。
+
+**额外 RL 获得的新能力，可能是 OPD 有效的重要来源。** 两个模型家族中，额外 RL Teacher 都带来了更高的 avg@16 曲线和 Gap Recovery Rate，支持“RL 新获得的能力更具迁移价值”这一解释。
+
+**Overlap Ratio 越高，不代表蒸馏收益一定越大。** 两个额外 RL Teacher 的初始 Overlap Ratio 反而更低，但其 Gap Recovery Rate 分别从 5.3% 提升到 16.9%、从 15.6% 提升到 58.6%。因此，兼容性会影响 Teacher 信号是否容易被 Student 利用，却不能单独决定 OPD 收益。
+
+> **Figure 4 的核心结论：OPD 要想真正有效，Teacher 不仅需要与 Student 足够兼容，还需要提供 Student 原本没有的新能力。仅仅选择一个分数更高或分布更接近的 Teacher，都不能保证蒸馏成功。**
+
+[论文：PDF pp. 6–7，Fig. 4]
 
 ## 3. 文章的方法：从目标函数到 token 级机制
 
@@ -236,12 +279,11 @@ thinking pattern 不兼容
 
 | 结论 | 关键证据 | 能支持什么 |
 |---|---|---|
-| 新能力比单纯规模更关键 | DeepSeek 家族的 gap recovery 为 16.9% vs. 5.3%；Qwen 家族为 58.6% vs. 15.6%，额外 RL 教师更可迁移 | 教师需要学生未见的新能力，而非只是更大 |
 | OPD 会学习教师的局部分布 | Reverse distillation 中，1.5B 与 7B 同家族教师把学生拉回近似相同水平 | 同家族不同规模教师在学生访问状态上可能局部分布近似 |
 | 共享高概率 token 是主要作用位置 | Overlap-only 几乎匹配 Student Top-$k$，non-overlap 显著更弱 | overlap 区域具有干预意义，不只是相关性 |
 | 全局有信息不等于局部可优化 | 成功和失败教师区分正确/错误 rollout 的 AUROC 分别约 0.73、0.75 | 失败不能简单归因于全局 reward 质量更差 |
 
-[论文：PDF pp. 7–10, 16，Figs. 4–7, 14]
+[论文：PDF pp. 7–10, 16，Figs. 5–7, 14]
 
 这里仍要保留一个边界：两条 recipe 主要修复 **thinking-pattern gap**，不能凭空给教师创造“新知识”。如果教师没有学生尚未获得的能力，分布对齐本身仍不足以产生显著增益。
 
