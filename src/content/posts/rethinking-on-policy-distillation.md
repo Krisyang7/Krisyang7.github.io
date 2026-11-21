@@ -261,58 +261,60 @@ $$
 
 [论文：PDF pp. 5–14]
 
-## 4. 本文解决了什么，为什么方法有效？
+## 4. 原文第四章：OPD 为什么有效，训练时怎么做？
 
-### 4.1 本文进一步回答的三个问题
+这一章只看两张图：Figure 6 用来判断一次 OPD 是否正在有效学习；Figure 7 用来判断真正有用的训练信号来自哪些 token。
 
-**第一，定位 OPD 真正起作用的 token 区域。**
+### 4.1 Figure 6：怎么判断 OPD 正在成功？
 
-[论文] 成功 OPD 中，师生共享的 top-$k$ token 数量并不大，却承载双方 **97%–99%** 的总概率质量。只在 overlap token 上优化，几乎可以匹配标准 Student Top-$k$ OPD；只优化 non-overlap token 则明显更弱。[论文：PDF pp. 9–10, 25，Figs. 6–7, 18]
+**图在比较什么。** 固定同一个 Student（R1-Distill-1.5B）和训练配置，只替换 Teacher。蓝线使用 JustRL-1.5B，是成功训练；红线使用整体分数略高的 R1-Distill-7B，但训练失败。
 
-**第二，把相关性推进到干预证据。**
+![论文 Figure 6：成功与失败 OPD 的准确率和动态指标](opd_figures/figure6-success-vs-failure.png)
 
-[论文] 在成功 run 中，overlap ratio 大约从 **72% 上升到 91% 以上**，advantage 趋近 0，entropy gap 收窄；失败 run 的三个指标从一开始就停滞。更重要的是，overlap-only 消融直接保留了几乎全部收益，因此共享高概率区域不仅“伴随成功”，也是主要优化位置。[论文：PDF pp. 9–11，Figs. 6–7]
+*Figure 6（论文第 9 页）：上排是三个测试集的 avg@16；下排依次是 Overlap Ratio、Overlap-Token Advantage 和 Abs Entropy Gap。*
 
-**第三，给出可以修复失败训练的方案。**
+**三个信号怎么读。**
 
-[论文] Cold start 先用 200K 教师响应做 SFT，再在约 30K 去重 prompts 上运行 OPD，使学生以更高初始 overlap、更小 entropy gap 开始训练；prompt 模板对齐提高 overlap，prompt 内容对齐则让更多概率质量集中到更少的共享高概率 token 上。[论文：PDF pp. 11–14, 27，Figs. 8–10]
+- **Overlap Ratio 上升**：师生最看好的 token 越来越一致，也就是越来越“对得上思路”。
+- **Overlap-Token Advantage 接近 0**：在双方都看好的 token 中，Student 分配的概率越来越接近 Teacher。
+- **Entropy Gap 缩小**：师生对下一步有多确定，逐渐变得一致。
 
-### 4.2 为什么方法可以解决：一条完整因果链
+**图中现象。** 成功的蓝线在三个测试集上持续提高，最终追回了超过 80% 的师生性能差距；下方三个指标也同时向好的方向变化。失败的红线几乎没有性能提升，三个指标从训练前期就基本停滞。
 
-可以把论文的核心机制压缩为：
+> **说人话：成功的 OPD 会出现三个同步信号——Overlap 上升、Advantage 靠近 0、Entropy Gap 缩小。如果三个指标很早就不动了，只增加训练步数通常不够。**
 
-[论文] 失败教师的序列级信号仍能区分正确与错误 rollout，因此 OPD 失败不等于教师完全没有信息。[分析] 论文尚未直接验证的是：这些信号是否因不同 token 位置的梯度方向不一致而相互抵消。
+Figure 6 给出的是诊断信号，不能单独证明其中某一个指标就是成功的充分原因。[论文：PDF pp. 8–9，Fig. 6]
 
-```text
-thinking pattern 不兼容
-→ 学生访问的状态远离教师熟悉区域
-→ 师生共享的高概率 token 少，或共享区域内概率分配不一致
-→ 教师信号即使在序列层面与正确性相关，也未必能在学生当前策略附近形成可利用的局部梯度
-→ overlap 停滞，OPD 失败
-```
+### 4.2 Figure 7：真正应该优化哪些 token？
 
-反过来，cold start 或 teacher-aligned prompts 先把学生带入教师熟悉的局部区域。进入这一共享区域后，reverse KL 会把更多概率集中到教师偏好的共同 token 上，并逐步挤出竞争 token：
+**图在比较什么。** 在同一次成功 OPD 中，只改变 loss 覆盖的 token：
 
-```text
-共享 token 被教师偏好
-→ 学生把更多概率放到共享 token
-→ 它们更稳定地留在学生 top-k 中
-→ 后续梯度继续作用于同一共享区域
-→ overlap 自增强，训练持续推进
-```
+- **Student Top-$k$**：优化 Student 最看好的全部 $k$ 个 token；
+- **Overlap Top-$k$**：只优化师生共同看好的 token；
+- **Non-Overlap Top-$k$**：只优化双方不重合的 token。
 
-[分析] 因此，OPD 的主要作用不是把学生突然拉向它此前完全不考虑的 token，而是在学生已经能够访问、师生共同认可的高概率候选中重新分配概率。这也解释了为什么初始分布兼容性如此重要。[论文：PDF pp. 9–11]
+论文默认 $k=16$。
 
-### 4.3 其余关键证据
+![论文 Figure 7：Overlap 与 Non-Overlap token 的消融实验](opd_figures/figure7-overlap-token-ablation.png)
 
-| 结论 | 关键证据 | 能支持什么 |
+*Figure 7（论文第 10 页）：蓝线为完整 Student Top-$k$，红线为 Overlap Top-$k$，灰线为 Non-Overlap Top-$k$。*
+
+**图中现象。** 红线几乎复现了蓝线的准确率和训练动态；灰线在三个测试集上都明显更弱。Student Top-$k$ 与 Overlap Top-$k$ 都让 Overlap Ratio 从约 72% 升到 91% 以上，而 Non-Overlap Top-$k$ 只恢复了一部分。原文还指出，共同 token 虽然数量不多，却承载师生 **97%–99%** 的总概率质量。
+
+> **说人话：OPD 主要不是把 Student 强行拉向它完全没考虑过的 token，而是在师生原本都觉得“有可能”的答案中重新分配概率。**
+
+Figure 7 说明 overlap 区域在这组数学任务和 $k=16$ 设置中是主要作用位置，但不能推出 non-overlap token 在所有任务中都没有价值。[论文：PDF pp. 9–10，Fig. 7]
+
+### 4.3 实际训练时，我们应该怎么做？
+
+| 训练中看到的信号 | 说明什么 | 应该怎么做 |
 |---|---|---|
-| 共享高概率 token 是主要作用位置 | Overlap-only 几乎匹配 Student Top-$k$，non-overlap 显著更弱 | overlap 区域具有干预意义，不只是相关性 |
-| 全局有信息不等于局部可优化 | 成功和失败教师区分正确/错误 rollout 的 AUROC 分别约 0.73、0.75 | 失败不能简单归因于全局 reward 质量更差 |
+| Overlap 上升、Advantage 接近 0、Entropy Gap 缩小 | Student 正在逐步用上 Teacher 的信号 | 继续训练，并同步观察验证集准确率 |
+| 三个指标从前期就长期停滞 | 当前 Teacher 的信号很难被 Student 利用 | 不要只增加训练步数；优先尝试 cold start、Teacher-aligned prompts，或重新选择 Teacher |
+| Overlap-only 接近完整 Top-$k$ | 主要收益来自师生共享的高概率 token | 保留 Student Top-$k$ 作为稳妥基线；做机制优化时优先关注 overlap 区域 |
+| Non-overlap-only 明显更弱 | 强行学习完全不重合的 token 效率较低 | 先缩小师生思考模式差距，再进行 OPD |
 
-[论文：PDF pp. 9–10, 16，Figs. 6–7, 14]
-
-这里仍要保留一个边界：两条 recipe 主要修复 **thinking-pattern gap**，不能凭空给教师创造“新知识”。如果教师没有学生尚未获得的能力，分布对齐本身仍不足以产生显著增益。
+需要注意：cold start 和 prompt 对齐只能让 Teacher 的信号更容易被 Student 使用，不能凭空让 Teacher 获得新的知识。
 
 ## 5. 现有方法的弊端与未来方向
 
