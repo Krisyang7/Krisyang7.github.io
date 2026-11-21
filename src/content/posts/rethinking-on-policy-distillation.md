@@ -168,29 +168,49 @@ $$
 
 ## 3. 本文解决了什么问题，为什么这些方法有效？
 
-### 3.1 论文实际解决的四个问题
+### 3.1 图 2–3 揭示的现象：强教师不一定更会教
 
-**第一，解释“强教师为什么也会教不会”。**
+**研究问题：** 为什么 Teacher 本身更强，蒸馏出的 Student 却不一定更好？
 
-> **图 2–3 的反常现象：** 同一个 Qwen3-1.7B-Base 学生分别向 Qwen3-4B-Base-GRPO 与 Qwen3-4B (Non-thinking) 学习。GRPO 教师自身的 benchmark 并非全面更高，它只在 AIME 2025 上领先，在 AIME 2024 和 AMC 2023 上反而更低；但它的初始 overlap ratio 更高，蒸馏后学生的验证准确率也始终更高。后期两组 overlap 虽趋同，性能差距仍未追回。[论文：PDF p. 6，Figs. 2–3]
+**实验设置：** 固定 Student（Qwen3-1.7B-Base）和训练数据（DAPO-Math-17K），分别使用 Qwen3-4B（Non-thinking）与 Qwen3-4B-Base-GRPO 作为 Teacher 进行 OPD。
 
-[论文] 这说明 OPD 更依赖训练初期的 thinking-pattern compatibility，而不是教师分数本身；早期错配造成的收益损失可能难以弥补。
+#### 先看 Teacher 自身能力：不存在全面占优的教师
 
-[论文] 这仍不是唯一条件。若教师与学生来自同一训练 pipeline、没有额外新能力，即使分数更高，也可能没有新的可迁移信息。[论文：PDF pp. 7–8，Figs. 4–5]
+![论文 Figure 3：两位 Teacher 的原始测试准确率](opd_figures/figure3-teacher-benchmark.png)
 
-**第二，定位 OPD 真正起作用的 token 区域。**
+*Figure 3（论文第 6 页）：Non-thinking Teacher 在 AIME 2024 和 AMC 2023 上更高，GRPO Teacher 只在 AIME 2025 上更高。*
+
+Figure 3 表明，两位 Teacher 的 benchmark 排名会随数据集变化：Non-thinking Teacher 在 AIME 2024（0.212 vs. 0.204）和 AMC 2023（0.700 vs. 0.599）上领先，而 GRPO Teacher 在 AIME 2025（0.242 vs. 0.210）上领先。因此，**不能仅凭 Teacher 的单项或平均 benchmark 分数预测蒸馏效果**。
+
+#### 再看蒸馏过程：GRPO Teacher 始终训练出更好的 Student
+
+![论文 Figure 2：学生蒸馏准确率与师生 Token 重合率](opd_figures/figure2-student-training-and-overlap.png)
+
+*Figure 2（论文第 6 页）：左图是蒸馏后 Student 的验证准确率，右图是师生 Overlap Ratio；紫线对应 GRPO Teacher，橙线对应 Non-thinking Teacher。*
+
+左图显示，虽然 GRPO Teacher 并未在 Figure 3 的所有 benchmark 上占优，但用它蒸馏的 Student 从约第 20 步起一直优于 Non-thinking Teacher 对应的 Student。到训练中后期，紫线约为 0.19–0.20，橙线约为 0.14–0.15。这是本文观察到的核心反常现象：**Teacher 自身分数更高，不等于它对当前 Student 更有效。**
+
+右图给出一种机制解释。Overlap Ratio 衡量 Teacher 与 Student 的 top-$k$ 高概率 token 集合有多大比例重合；值越高，说明两者在 Student 当前访问状态上的局部预测分布越兼容。GRPO Teacher 的初始 overlap 约为 0.67，而 Non-thinking Teacher 只有约 0.57–0.60，说明前者从训练开始就更接近 Student 的预测模式。
+
+还可以看到，橙线在训练后期逐渐接近紫线，但左图中的准确率差距没有消失。这说明**训练早期的师生错配可能产生持续影响**：早期低兼容性会让 Student 难以利用 Teacher 的 token 级监督，后期 overlap 恢复也未必能追回已经损失的训练收益。
+
+> **本节结论：** 选择 OPD Teacher 时，不能只看 Teacher 的 benchmark 分数，还要考察它与当前 Student 的局部分布兼容性。图 2–3 支持“初始 thinking-pattern compatibility 影响 OPD 效果”这一解释，但两组 Teacher 对照仍不足以证明它是唯一原因。[论文：PDF p. 6，Figs. 2–3]
+
+### 3.2 论文进一步解决的三个问题
+
+**第一，定位 OPD 真正起作用的 token 区域。**
 
 [论文] 成功 OPD 中，师生共享的 top-$k$ token 数量并不大，却承载双方 **97%–99%** 的总概率质量。只在 overlap token 上优化，几乎可以匹配标准 Student Top-$k$ OPD；只优化 non-overlap token 则明显更弱。[论文：PDF pp. 9–10, 25，Figs. 6–7, 18]
 
-**第三，把相关性推进到干预证据。**
+**第二，把相关性推进到干预证据。**
 
 [论文] 在成功 run 中，overlap ratio 大约从 **72% 上升到 91% 以上**，advantage 趋近 0，entropy gap 收窄；失败 run 的三个指标从一开始就停滞。更重要的是，overlap-only 消融直接保留了几乎全部收益，因此共享高概率区域不仅“伴随成功”，也是主要优化位置。[论文：PDF pp. 9–11，Figs. 6–7]
 
-**第四，给出可以修复失败训练的方案。**
+**第三，给出可以修复失败训练的方案。**
 
 [论文] Cold start 先用 200K 教师响应做 SFT，再在约 30K 去重 prompts 上运行 OPD，使学生以更高初始 overlap、更小 entropy gap 开始训练；prompt 模板对齐提高 overlap，prompt 内容对齐则让更多概率质量集中到更少的共享高概率 token 上。[论文：PDF pp. 11–14, 27，Figs. 8–10]
 
-### 3.2 为什么方法可以解决：一条完整因果链
+### 3.3 为什么方法可以解决：一条完整因果链
 
 可以把论文的核心机制压缩为：
 
@@ -216,7 +236,7 @@ thinking pattern 不兼容
 
 [分析] 因此，OPD 的主要作用不是把学生突然拉向它此前完全不考虑的 token，而是在学生已经能够访问、师生共同认可的高概率候选中重新分配概率。这也解释了为什么初始分布兼容性如此重要。[论文：PDF pp. 9–11]
 
-### 3.3 其余关键证据
+### 3.4 其余关键证据
 
 | 结论 | 关键证据 | 能支持什么 |
 |---|---|---|
