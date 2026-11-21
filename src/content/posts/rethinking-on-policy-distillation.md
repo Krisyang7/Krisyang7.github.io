@@ -62,41 +62,53 @@ On-Policy Distillation（OPD）把监督位置换到了学生自己访问的状�
 
 > **学生只会做自己熟悉的题。老师即使给出每个选项的完整评分，这些信息何时才能让学生进步？如果无效，问题出在教师能力、师生分布不兼容，还是训练方法没有利用好这些信息？**
 
-## 2. 发现的问题：Teacher 自身表现为何无法决定 OPD 效果？
+## 2. 实验发现：什么决定 OPD 是否有效？
 
-固定 Student（Qwen3-1.7B-Base）与训练数据（DAPO-Math-17K），分别使用 Qwen3-4B（Non-thinking）和 Qwen3-4B-Base-GRPO 进行 OPD。
+本章用三组对照回答三个问题：Teacher 自身分数更高是否一定更适合蒸馏？较高的师生兼容性是否已经足够？OPD 最终把什么迁移给了 Student？
 
-### 2.1 反常现象：GRPO Teacher 自身并不更强，蒸馏出的 Student 反而更好
+### 2.1 Teacher 自身不更强，为什么反而蒸馏得更好？
+
+固定 Student（Qwen3-1.7B-Base）和训练数据（DAPO-Math-17K），只将 Teacher 替换为 Qwen3-4B（Non-thinking）或 Qwen3-4B-Base-GRPO。
+
+**Figure 3 的意义：先比较两位 Teacher 自身的能力。**
 
 ![论文 Figure 3：两位 Teacher 的原始测试准确率](opd_figures/figure3-teacher-benchmark.png)
 
 *Figure 3（论文第 6 页）：两位 Teacher 在 AIME 2024、AIME 2025 和 AMC 2023 上的原始准确率。*
 
-GRPO Teacher 在 AIME 2024 和 AMC 2023 上低于 Non-thinking Teacher，只在 AIME 2025 上更高，三项平均也略低。论文因此将两位 Teacher 视为总体可比，但 GRPO Teacher 的自身表现并不更强。
+**比较指标。** Accuracy（avg@16）表示每道题采样 16 个回答后的平均正确率；Figure 3 分别报告三个 benchmark 的结果。
+
+**图中现象。** GRPO Teacher 在 AIME 2024 和 AMC 2023 上更低，只在 AIME 2025 上更高，三项平均也略低。因此，后续蒸馏优势不能归因于 GRPO Teacher 自身分数更高。
+
+**Figure 2 的意义：再比较 Student 的蒸馏结果与师生兼容性。**
 
 ![论文 Figure 2：学生蒸馏准确率与师生 Token 重合率](opd_figures/figure2-student-training-and-overlap.png)
 
-*Figure 2（论文第 6 页）：左图比较同一 Student 分别向两位 Teacher 学习后的验证准确率，虚线表示 Teacher 自身准确率；右图比较师生 Overlap Ratio。紫线对应 GRPO Teacher，橙线对应 Non-thinking Teacher。*
+*Figure 2（论文第 6 页）：紫线使用 GRPO Teacher，橙线使用 Non-thinking Teacher。*
 
-Figure 2 左图却显示，使用 GRPO Teacher 蒸馏的 Student 在训练中持续优于使用 Non-thinking Teacher 的 Student。于是出现了一个反常结果：**在多数独立 benchmark 上表现更好的 Non-thinking Teacher，并没有训练出更好的 Student；反而是 GRPO Teacher 带来了更高的蒸馏准确率。**
+**比较指标。** 左图是 Student 的平均验证准确率（avg@16），虚线表示对应 Teacher 的准确率；右图是 Overlap Ratio，即师生 top-$k$ 高概率 token 的重合比例，越高表示两者在 Student 当前状态上的局部预测分布越兼容。
 
-Figure 2 右图进一步给出解释线索：GRPO Teacher 与 Student 的初始 Overlap Ratio 更高。Overlap Ratio 表示师生 top-$k$ 高概率 token 的重合比例，越高说明两者在 Student 当前状态上的局部预测分布越兼容。
+**图中现象。** GRPO Teacher 自身并不更强，但用它蒸馏的 Student 始终取得更高准确率，同时师生初始 Overlap Ratio 也更高。虽然两组 Overlap Ratio 在后期逐渐接近，Student 的性能差距仍然存在。
 
-虽然两组 overlap 在训练后期逐渐接近，但左图中的 Student 性能差距仍然存在。作者据此认为，训练早期的思考模式错配会损失蒸馏收益，而且这种损失后期难以追回。
+> **实验说明的问题：Teacher 自身 benchmark 分数不能单独预测 OPD 效果。在这组对照中，更高的初始师生兼容性对应更好的蒸馏结果，且早期错配造成的损失可能难以后期追回；但图 2–3 不能证明兼容性是唯一原因。**
 
-> **第一个发现：** OPD Teacher 的选择不能只看 Teacher 自身准确率，还要看它与 Student 的初始 thinking-pattern compatibility。图 2–3 支持这一解释，但兼容性是否足以保证 OPD 成功，还需要下一组对照检验。[论文：PDF p. 6，Figs. 2–3]
+[论文：PDF p. 6，Figs. 2–3]
 
-### 2.2 新能力比高分或高 Overlap 更关键
+### 2.2 兼容性还不够：Teacher 还需要提供新能力
+
+**Figure 4 的意义：检验兼容性之外，Teacher 是否还需要提供新的可迁移能力。**
 
 ![论文 Figure 4：额外 RL Teacher 与同流水线 Teacher 的 OPD 效果](opd_figures/figure4-rl-capability-transfer.png)
 
 *Figure 4（论文第 7 页）：左图为 DeepSeek 家族，右图为 Qwen 家族；紫线使用额外 RL Teacher，橙线使用同流水线 Teacher。*
 
-论文固定 Student、OPD 数据和训练配置，在两个模型家族中只改变 Teacher。图中比较三项指标：
+论文在每个模型家族内固定 Student、OPD 数据和训练配置，只比较同流水线 Teacher 与经过额外 RL 的 Teacher。
 
-1. **Accuracy（avg@16）**：每道题采样 16 个回答后的平均正确率，表示 Student 的实际表现。
-2. **Initial Overlap Ratio**：训练前师生 top-$k$ 高概率 token 的重合比例，表示初始兼容性。
-3. **Gap Recovery Rate**：Student 通过 OPD 弥补的师生初始性能差距比例：
+**比较指标。**
+
+- **Accuracy（avg@16）**：每道题采样 16 个回答后的平均正确率；图中曲线进一步汇总了三个 benchmark，用于衡量 Student 的实际表现。
+- **Initial Overlap Ratio**：训练开始前的师生 top-$k$ token 重合比例，用于衡量初始兼容性。
+- **Gap Recovery Rate**：Teacher–Student 初始 benchmark 性能差距被 OPD 弥补的比例：
 
 $$
 \text{Gap Recovery Rate}
@@ -104,7 +116,7 @@ $$
 {\mathrm{Acc}_{\text{Teacher}}-\mathrm{Acc}_{\text{before OPD}}}.
 $$
 
-0% 表示没有缩小差距，100% 表示完全追平 Teacher。因此，Gap Recovery Rate 比 Teacher 自身分数更直接地反映能力是否成功迁移。
+0% 表示没有缩小差距，100% 表示完全追平 Teacher。
 
 | 模型家族 | Teacher 类型 | Initial Overlap Ratio | Gap Recovery Rate |
 |---|---|---:|---:|
@@ -113,33 +125,27 @@ $$
 | Qwen | 同流水线 Teacher | 75.7% | 15.6% |
 | Qwen | 额外 RL Teacher | 70.3% | 58.6% |
 
-结果很直接：两个额外 RL Teacher 的初始 Overlap Ratio 都更低，但 avg@16 曲线和 Gap Recovery Rate 都更高。
+**图中现象。** 两个额外 RL Teacher 的初始 Overlap Ratio 都略低，但 Student 的 avg@16 曲线和 Gap Recovery Rate 都明显更高。
 
-- **Teacher 分数高，不等于可迁移知识多。** 分数衡量 Teacher 自己会不会做，Gap Recovery Rate 才衡量 Student 学到了多少。
-- **Overlap Ratio 高，不等于蒸馏收益大。** 它说明师生是否兼容，但不能说明 Teacher 是否提供了新能力。
-- **额外 RL 获得的新能力可能是 OPD 收益的重要来源。** 这一结论在 DeepSeek 和 Qwen 两个家族中呈现一致趋势。
-
-> **Figure 4 的核心结论：OPD 要想真正有效，Teacher 不仅需要与 Student 足够兼容，还需要提供 Student 原本没有的新能力。仅仅选择一个分数更高或分布更接近的 Teacher，都不能保证蒸馏成功。**
+> **实验说明的问题：Initial Overlap Ratio 只衡量兼容性，不能衡量可迁移增量。有效 OPD 既需要 Teacher 与 Student 足够兼容，也需要 Teacher 提供 Student 尚未掌握的新能力。结果支持额外 RL 是这种新能力的重要来源，但不能证明它是唯一原因。**
 
 [论文：PDF pp. 6–7，Fig. 4]
 
-### 2.3 逆向蒸馏：OPD 会覆盖 Student 的思考模式
+### 2.3 更大、更高分的 Teacher，为什么仍会让 Student 退化？
+
+**Figure 5 的意义：用逆向蒸馏检验 OPD 会保留 Student 的 RL 增益，还是把 Student 拉向 Teacher 的模式。**
 
 ![论文 Figure 5：同家族 Teacher 对 JustRL-1.5B 的逆向蒸馏](opd_figures/figure5-reverse-distillation.png)
 
-*Figure 5（论文第 8 页）：Student 为 JustRL-1.5B；紫线和橙线分别使用 R1-Distill-1.5B 与 R1-Distill-7B 作为 Teacher，横向虚线表示对应 Teacher 的自身准确率。*
+*Figure 5（论文第 8 页）：Student 为 JustRL-1.5B；紫线和橙线分别使用 R1-Distill-1.5B 与 R1-Distill-7B 作为 Teacher。*
 
-**比较设置。** JustRL-1.5B 是由 R1-Distill-1.5B 继续 RL 得到的。论文反过来以其 pre-RL checkpoint（R1-Distill-1.5B）和同家族更大的 R1-Distill-7B 为 Teacher，观察 OPD 是否能保留 Student 的 RL 能力。
+JustRL-1.5B 由 R1-Distill-1.5B 继续 RL 得到。论文反过来使用它的 pre-RL checkpoint 和同家族更大的 7B 模型作为 Teacher；两位 Teacher 都没有经历产生 JustRL-1.5B 的这段后续 RL 训练。
 
-**怎么读图。** 横轴是训练步数，纵轴是 AIME 2024、AIME 2025 和 AMC 2023 上的 avg@16；两条曲线表示 Student 在 OPD 过程中的准确率。
+**比较指标。** 横轴为训练步数，纵轴为 AIME 2024、AIME 2025 和 AMC 2023 上的 avg@16；紫、橙曲线表示 Student 的训练表现，横向虚线表示对应 Teacher 的准确率。
 
-**结果。** 两条曲线都从 JustRL-1.5B 的初始水平快速下降，最终在三个 benchmark 上收敛到近似的较低水平。R1-Distill-7B 虽然自身分数更高，却没有改善 Student，反而带来与较弱 1.5B Teacher 几乎相同的退化。
+**图中现象。** 两条曲线都从 JustRL-1.5B 的初始水平快速下降，并在三个 benchmark 上收敛到近似的较低水平。R1-Distill-7B 的分数略高于当前 Student，R1-Distill-1.5B 则明显更弱，但两位 Teacher 最终造成了几乎相同的退化。
 
-- **OPD 会学习并覆盖思考模式。** pre-RL Teacher 将 Student 拉回接近 pre-RL 的表现，说明 Student 后续 RL 获得的模式会被 Teacher 的模式覆盖。
-- **Teacher 的 benchmark 分数不能预测 OPD 结果。** 更大、更高分的 7B Teacher 并未带来更好的蒸馏结果。
-- **模型更大不等于提供了新的可迁移知识。** 两位同家族 Teacher 产生近似训练轨迹，说明在 Student 实际访问的状态上，它们提供的局部目标分布可能非常接近。
-
-> **Figure 5 的核心结论：OPD 主要把 Student 推向 Teacher 的思考模式；如果 Teacher 没有提供 Student 尚未掌握的新能力，那么更大的规模或更高的分数不仅不能保证收益，还可能覆盖 Student 已有的能力。**
+> **实验说明的问题：OPD 会把 Student 推向 Teacher 在 Student 访问状态上的局部目标分布。当 Teacher 没有提供新的可迁移能力时，更大的规模或更高的分数仍可能抹去 Student 的 RL 增益。两条训练轨迹近似只说明局部目标可能接近，不能据此断言两位 Teacher 的全局分布完全相同。**
 
 [论文：PDF pp. 7–8，Fig. 5]
 
