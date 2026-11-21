@@ -80,9 +80,7 @@ GRPO Teacher 在 AIME 2024 和 AMC 2023 上低于 Non-thinking Teacher，只在 
 
 Figure 2 左图却显示，使用 GRPO Teacher 蒸馏的 Student 在训练中持续优于使用 Non-thinking Teacher 的 Student。于是出现了一个反常结果：**在多数独立 benchmark 上表现更好的 Non-thinking Teacher，并没有训练出更好的 Student；反而是 GRPO Teacher 带来了更高的蒸馏准确率。**
 
-### 2.2 解释线索：GRPO Teacher 与 Student 的初始思考模式更一致
-
-Figure 2 右图显示，GRPO Teacher 与 Student 的初始 Overlap Ratio 更高。Overlap Ratio 表示师生 top-$k$ 高概率 token 的重合比例，越高说明两者在 Student 当前状态上的局部预测分布越兼容。
+Figure 2 右图进一步给出解释线索：GRPO Teacher 与 Student 的初始 Overlap Ratio 更高。Overlap Ratio 表示师生 top-$k$ 高概率 token 的重合比例，越高说明两者在 Student 当前状态上的局部预测分布越兼容。
 
 虽然两组 overlap 在训练后期逐渐接近，但左图中的 Student 性能差距仍然存在。作者据此认为，训练早期的思考模式错配会损失蒸馏收益，而且这种损失后期难以追回。
 
