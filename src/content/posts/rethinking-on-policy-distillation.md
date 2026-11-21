@@ -149,6 +149,14 @@ JustRL-1.5B 由 R1-Distill-1.5B 继续 RL 得到。论文反过来使用它的 p
 
 [论文：PDF pp. 7–8，Fig. 5]
 
+### 2.4 本章发现的问题
+
+| 实验证据 | 直接观察 | 发现的问题 |
+|---|---|---|
+| Figures 2–3 | GRPO Teacher 自身并不更强，但蒸馏出的 Student 更好，且初始 Overlap Ratio 更高 | **Teacher 分数不能单独预测 OPD 效果；初始师生兼容性很重要** |
+| Figure 4 | 额外 RL Teacher 的初始 Overlap Ratio 略低，但 avg@16 与 Gap Recovery Rate 更高 | **兼容性不是充分条件；Teacher 还需提供新的可迁移能力** |
+| Figure 5 | 1.5B 与更大、更高分的 7B Teacher 都让 Student 出现近似退化 | **规模和高分不等于新知识；OPD 还可能抹去 Student 的 RL 增益** |
+
 ## 3. 文章的方法：从目标函数到 token 级机制
 
 ### 3.1 OPD 的基本目标
