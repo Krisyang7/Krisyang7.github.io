@@ -64,7 +64,7 @@ On-Policy Distillation（OPD）把监督位置换到了学生自己访问的状�
 
 ## 2. 实验发现：什么决定 OPD 是否有效？
 
-这一章想弄清楚三件事：Teacher 自己考得好，是否就更会教？师生一开始的思路接近，是否就一定能学好？OPD 最终会把 Student 拉向什么方向？
+这一章先判断什么样的 Teacher 能教好 Student，再检查长轨迹、局部 reward 和 token 选择为什么会让 OPD 失效。
 
 ### 2.1 Teacher 自身不更强，为什么反而蒸馏得更好？
 
@@ -149,13 +149,66 @@ JustRL-1.5B 由 R1-Distill-1.5B 继续 RL 得到。论文反过来使用它的 R
 
 [论文：PDF pp. 7–8，Fig. 5]
 
-### 2.4 用人话总结：三组实验到底发现了什么？
+### 2.4 轨迹不是越长越好：Teacher 的监督会随深度变差
+
+**Figure 11 的意义：检查增加回答长度，是否一定能提供更多有效监督。** 左图比较最大回答长度为 0.5K、1K、3K、7K、10K 和 15K 时的 avg@16；右图先截取不同长度的 Student 前缀，再让 Teacher 继续作答，测量准确率能提高多少。
+
+![论文 Figure 11：回答长度与 Teacher continuation 效果](opd_figures/figure11-long-horizon-reward-degradation.png)
+
+*Figure 11（论文第 14 页）：左图比较不同最大回答长度，右图比较 Teacher 从不同长度 Student 前缀继续生成时的准确率增益。*
+
+**图中现象。** 0.5K 和 1K 太短，有效监督不足；3K 和 7K 效果最好；继续增加到 10K 和 15K，性能不再提高甚至下降。Teacher continuation 的增益也随 Student 前缀变长，从 1K 时的 **+0.3659** 降到 16K 时的 **+0.0237**。
+
+原文的 Figures 12–13 进一步显示，10K/15K 训练会在后期出现 Overlap 下降、Entropy 和 Gradient Norm 尖峰；不稳定先从回答末尾出现，再逐渐向前传播。
+
+> **这个实验说明：OPD 的轨迹不是越长越好。Student 生成得越远，前缀越可能离开 Teacher 熟悉的状态，后面的逐 token 监督会先变乱，最后影响整个训练。**
+
+这一结论来自特定数学任务和模型组合，不能直接推断到所有长文本或多轮 Agent。[论文：PDF pp. 14–15，Figs. 11–13]
+
+### 2.5 Teacher 有全局信息，为什么 OPD 仍会失败？
+
+**Figure 14 的意义：检查失败 Teacher 的 reward 是否真的没有信息。** 固定同一个 Student，对比成功的 JustRL-1.5B Teacher 与失败的 R1-Distill-7B Teacher；再比较正确和错误 rollout 的 sequence mean reward 分布。
+
+![论文 Figure 14：成功与失败 Teacher 的全局 reward 分布](opd_figures/figure14-global-vs-local-reward.png)
+
+*Figure 14（论文第 16 页）：蓝色为正确 rollout，红色为错误 rollout；AUROC 衡量 reward 区分正确与错误的能力。*
+
+**图中现象。** 两位 Teacher 都给正确 rollout 更高的平均 reward。成功 Teacher 的 AUROC 为 **0.7333**，失败 Teacher 反而达到 **0.7511**。因此，失败不能简单解释为“Teacher 的 reward 完全没有信息”。
+
+> **这个实验说明：Teacher 能判断整道题答得好不好，不代表它给出的每一步修改方向都能推动 Student。全局 reward 有信息，局部训练信号仍可能无法利用。**
+
+作者猜测，不同 token 位置的梯度方向可能互相抵消，但论文没有直接测量这些方向，因此这仍是假设，不能写成已经证明的原因。[论文：PDF pp. 15–16，Fig. 14]
+
+### 2.6 监督 token 不是越多越好，关键是怎么选
+
+**Figure 15 的意义：比较每个位置到底需要监督多少个 token。** 实验对比 Sampled-token OPD，以及 Top-1、Top-4、Top-16、Top-64 OPD；纵轴是三个测试集的 avg@16。
+
+![论文 Figure 15：不同 token support size 的最终准确率](opd_figures/figure15-support-size-performance.png)
+
+*Figure 15（论文第 17 页）：Sampled-token 与大多数 Top-$k$ 设置表现接近，Top-1 整体最弱。*
+
+**Figure 16 的意义：解释 Top-1 为什么更差。**
+
+![论文 Figure 16：不同 Top-k 设置的训练动态](opd_figures/figure16-support-size-dynamics.png)
+
+*Figure 16（论文第 17 页）：Top-1 的 Overlap、Entropy 和 Gradient Norm 明显更不稳定；Top-16 与 Top-64 最平滑。*
+
+**图中现象。** Sampled-token OPD 与 Top-$k$ 的最终准确率整体接近；从 Top-4 增加到 Top-16/64，提升很小但计算更贵。真正明显失败的是 Top-1，它始终只选择 argmax token，第一名稍有变化就会让监督信号剧烈波动。
+
+> **这个实验说明：问题不在于“每次只监督一个 token”，而在于这个 token 怎么选。按 Student 概率随机采样，长期仍能覆盖主要候选；永远只盯 Top-1 反而容易不稳定。**
+
+这只能说明该实验中增大 $k$ 的边际收益较小，不能推出所有任务都只需要 Sampled-token。[论文：PDF pp. 16–17，Figs. 15–16]
+
+### 2.7 用人话总结：这些实验到底发现了什么？
 
 | 图 | 看到的现象 | 最容易记住的结论 |
 |---|---|---|
 | Figures 2–3 | GRPO Teacher 自己分数不更高，却教出了更好的 Student | **老师自己考得好，不代表更会教这个 Student；训练开始时能否对上思路很重要** |
 | Figure 4 | 额外 RL Teacher 的初始 Overlap 略低，却带来了更高的 Student 准确率和 Gap Recovery Rate | **能对上思路只是前提，Teacher 还得有 Student 没学过的东西** |
 | Figure 5 | 1.5B 和更高分的 7B Teacher 都把 Student 拉到了近似的较低水平 | **OPD 不是只增不减；Teacher 没有新东西可教时，也可能把 Student 已有的 RL 提升带丢** |
+| Figures 11–13 | 中等长度最好；轨迹过长后，训练从回答末尾开始失稳 | **稠密监督不是全程同样可靠，Student 走得越远，Teacher 的信号越容易失真** |
+| Figure 14 | 失败 Teacher 的 reward 仍能区分正确与错误 rollout | **全局信号有信息，不等于局部梯度能被 Student 利用** |
+| Figures 15–16 | Sampled-token 与 Top-$k$ 接近，Top-1 却明显更不稳定 | **监督 token 不是越多越好；选择方式比数量更重要** |
 
 ## 3. OPD 为什么有效，训练时怎么做？
 
@@ -384,7 +437,7 @@ $$
 
 **3）在本文设置中，长轨迹会削弱稠密监督的可靠性。**
 
-3K/7K response length 附近效果较好，10K/15K 在训练后期出现 entropy 与 gradient norm 尖峰；教师从学生 prefix 继续生成的准确率优势，从 1K prefix 的约 **+0.37** 降到 16K prefix 的约 **+0.02**。学生走得越远，前缀越可能离开教师熟悉状态。[论文：PDF pp. 14–16，Figs. 11–13]
+具体实验见 2.4；目前证据集中在数学任务和一个模型组合，能否推广到长文本生成和多轮 Agent 仍需验证。[论文：PDF pp. 14–16，Figs. 11–13]
 
 **4）Prompt 对齐可能压缩探索能力。**
 
@@ -392,7 +445,7 @@ $$
 
 **5）局部梯度几何仍只是一个假设。**
 
-失败教师的全局 reward 仍能区分正确与错误 rollout，但有效 gradient norm 更小。作者提出 per-token advantage 可能在不同位置方向不一致、聚合时相互抵消，但尚未直接验证。[论文：PDF pp. 16–17]
+2.5 展示了“全局 reward 有信息但 OPD 仍失败”的现象；作者提出的 per-token 梯度相互抵消解释尚未被直接验证。[论文：PDF pp. 15–16，Fig. 14]
 
 **6）Self-distillation 仍需单独验证。**
 
