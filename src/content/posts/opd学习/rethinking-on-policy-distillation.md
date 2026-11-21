@@ -1,5 +1,6 @@
 ---
 title: "重思大模型 On-Policy Distillation：何时有效、为什么有效、如何修复失败"
+slug: rethinking-on-policy-distillation
 description: 一篇从两个成功条件、共享高概率 token 机制、修复策略到长轨迹边界的 OPD 论文精读。
 publishDate: 2026-11-20
 tags:
