@@ -62,27 +62,31 @@ On-Policy Distillation（OPD）把监督位置换到了学生自己访问的状�
 
 > **学生只会做自己熟悉的题。老师即使给出每个选项的完整评分，这些信息何时才能让学生进步？如果无效，问题出在教师能力、师生分布不兼容，还是训练方法没有利用好这些信息？**
 
-## 2. 发现的问题：Teacher 的 benchmark 分数为何不足以预测蒸馏效果？
+## 2. 发现的问题：Teacher 自身表现为何无法决定 OPD 效果？
 
 固定 Student（Qwen3-1.7B-Base）与训练数据（DAPO-Math-17K），分别使用 Qwen3-4B（Non-thinking）和 Qwen3-4B-Base-GRPO 进行 OPD。
 
-### 2.1 Teacher 自身表现不能直接预测蒸馏结果
+### 2.1 反常现象：GRPO Teacher 自身并不更强，蒸馏出的 Student 反而更好
 
 ![论文 Figure 3：两位 Teacher 的原始测试准确率](opd_figures/figure3-teacher-benchmark.png)
 
-*Figure 3（论文第 6 页）：两位 Teacher 在三个 benchmark 上的原始准确率。*
+*Figure 3（论文第 6 页）：两位 Teacher 在 AIME 2024、AIME 2025 和 AMC 2023 上的原始准确率。*
 
-Non-thinking Teacher 在 AIME 2024 和 AMC 2023 上更高，GRPO Teacher 在 AIME 2025 上更高。两者没有稳定的强弱排序，因此仅凭 Teacher 的 benchmark 分数无法判断谁更适合当前 Student。
-
-### 2.2 初始思考模式一致性与蒸馏效果更相关
+GRPO Teacher 在 AIME 2024 和 AMC 2023 上低于 Non-thinking Teacher，只在 AIME 2025 上更高，三项平均也略低。论文因此将两位 Teacher 视为总体可比，但 GRPO Teacher 的自身表现并不更强。
 
 ![论文 Figure 2：学生蒸馏准确率与师生 Token 重合率](opd_figures/figure2-student-training-and-overlap.png)
 
-*Figure 2（论文第 6 页）：左图比较蒸馏后 Student 的验证准确率，右图比较师生 Overlap Ratio；紫线对应 GRPO Teacher，橙线对应 Non-thinking Teacher。*
+*Figure 2（论文第 6 页）：左图比较同一 Student 分别向两位 Teacher 学习后的验证准确率，虚线表示 Teacher 自身准确率；右图比较师生 Overlap Ratio。紫线对应 GRPO Teacher，橙线对应 Non-thinking Teacher。*
 
-GRPO Teacher 蒸馏出的 Student 在训练中始终更准确，同时师生初始 Overlap Ratio 也更高。Overlap Ratio 表示双方 top-$k$ 高概率 token 的重合比例，越高说明局部预测分布越兼容。虽然两组 overlap 后期逐渐接近，Student 的性能差距仍然存在，说明训练早期的师生错配可能造成后续难以追回的收益损失。
+Figure 2 左图却显示，使用 GRPO Teacher 蒸馏的 Student 在训练中持续优于使用 Non-thinking Teacher 的 Student。于是出现了一个反常结果：**在多数独立 benchmark 上表现更好的 Non-thinking Teacher，并没有训练出更好的 Student；反而是 GRPO Teacher 带来了更高的蒸馏准确率。**
 
-> **发现：** OPD Teacher 的选择不能只看自身准确率，还要看它与 Student 的初始局部分布兼容性。图 2–3 支持这一解释，但两组 Teacher 对照不足以证明它是唯一原因。[论文：PDF p. 6，Figs. 2–3]
+### 2.2 解释线索：GRPO Teacher 与 Student 的初始思考模式更一致
+
+Figure 2 右图显示，GRPO Teacher 与 Student 的初始 Overlap Ratio 更高。Overlap Ratio 表示师生 top-$k$ 高概率 token 的重合比例，越高说明两者在 Student 当前状态上的局部预测分布越兼容。
+
+虽然两组 overlap 在训练后期逐渐接近，但左图中的 Student 性能差距仍然存在。作者据此认为，训练早期的思考模式错配会损失蒸馏收益，而且这种损失后期难以追回。
+
+> **第一个发现：** OPD Teacher 的选择不能只看 Teacher 自身准确率，还要看它与 Student 的初始 thinking-pattern compatibility。图 2–3 支持这一解释，但不能证明兼容性是唯一原因或充分条件；论文随后还指出，Teacher 是否提供 Student 尚未掌握的新知识同样重要。[论文：PDF p. 6，Figs. 2–3]
 
 ## 3. 文章的方法：从目标函数到 token 级机制
 
