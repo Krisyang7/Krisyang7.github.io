@@ -123,6 +123,26 @@ $$
 
 [论文：PDF pp. 6–7，Fig. 4]
 
+### 2.3 逆向蒸馏：OPD 会覆盖 Student 的思考模式
+
+![论文 Figure 5：同家族 Teacher 对 JustRL-1.5B 的逆向蒸馏](opd_figures/figure5-reverse-distillation.png)
+
+*Figure 5（论文第 8 页）：Student 为 JustRL-1.5B；紫线和橙线分别使用 R1-Distill-1.5B 与 R1-Distill-7B 作为 Teacher，横向虚线表示对应 Teacher 的自身准确率。*
+
+**比较设置。** JustRL-1.5B 是由 R1-Distill-1.5B 继续 RL 得到的。论文反过来以其 pre-RL checkpoint（R1-Distill-1.5B）和同家族更大的 R1-Distill-7B 为 Teacher，观察 OPD 是否能保留 Student 的 RL 能力。
+
+**怎么读图。** 横轴是训练步数，纵轴是 AIME 2024、AIME 2025 和 AMC 2023 上的 avg@16；两条曲线表示 Student 在 OPD 过程中的准确率。
+
+**结果。** 两条曲线都从 JustRL-1.5B 的初始水平快速下降，最终在三个 benchmark 上收敛到近似的较低水平。R1-Distill-7B 虽然自身分数更高，却没有改善 Student，反而带来与较弱 1.5B Teacher 几乎相同的退化。
+
+- **OPD 会学习并覆盖思考模式。** pre-RL Teacher 将 Student 拉回接近 pre-RL 的表现，说明 Student 后续 RL 获得的模式会被 Teacher 的模式覆盖。
+- **Teacher 的 benchmark 分数不能预测 OPD 结果。** 更大、更高分的 7B Teacher 并未带来更好的蒸馏结果。
+- **模型更大不等于提供了新的可迁移知识。** 两位同家族 Teacher 产生近似训练轨迹，说明在 Student 实际访问的状态上，它们提供的局部目标分布可能非常接近。
+
+> **Figure 5 的核心结论：OPD 主要把 Student 推向 Teacher 的思考模式；如果 Teacher 没有提供 Student 尚未掌握的新能力，那么更大的规模或更高的分数不仅不能保证收益，还可能覆盖 Student 已有的能力。**
+
+[论文：PDF pp. 7–8，Fig. 5]
+
 ## 3. 文章的方法：从目标函数到 token 级机制
 
 ### 3.1 OPD 的基本目标
@@ -273,11 +293,10 @@ thinking pattern 不兼容
 
 | 结论 | 关键证据 | 能支持什么 |
 |---|---|---|
-| OPD 会学习教师的局部分布 | Reverse distillation 中，1.5B 与 7B 同家族教师把学生拉回近似相同水平 | 同家族不同规模教师在学生访问状态上可能局部分布近似 |
 | 共享高概率 token 是主要作用位置 | Overlap-only 几乎匹配 Student Top-$k$，non-overlap 显著更弱 | overlap 区域具有干预意义，不只是相关性 |
 | 全局有信息不等于局部可优化 | 成功和失败教师区分正确/错误 rollout 的 AUROC 分别约 0.73、0.75 | 失败不能简单归因于全局 reward 质量更差 |
 
-[论文：PDF pp. 7–10, 16，Figs. 5–7, 14]
+[论文：PDF pp. 9–10, 16，Figs. 6–7, 14]
 
 这里仍要保留一个边界：两条 recipe 主要修复 **thinking-pattern gap**，不能凭空给教师创造“新知识”。如果教师没有学生尚未获得的能力，分布对齐本身仍不足以产生显著增益。
 
