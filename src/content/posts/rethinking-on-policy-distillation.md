@@ -316,9 +316,63 @@ $$
 
 [论文：PDF pp. 5–14]
 
-## 5. 现有方法的弊端与未来方向
+## 5. 原文第五章：怎样修复失败的 OPD？
 
-### 5.1 作者明确指出的局限
+原文没有修改 OPD 的 loss，而是从两个地方缩小师生差距：先改变 Student 的起点，或者让训练 prompts 更贴近 Teacher。
+
+### 5.1 实验一：先做 SFT cold start，再做 OPD
+
+**怎么做。** Teacher 先生成 200K 条回答，用这些回答对 Qwen3-1.7B-Base 做 SFT；然后再使用约 30K 条去重 prompts 进行 OPD。
+
+**图在比较什么。** 两组使用相同的 Teacher（Qwen3-4B Non-thinking）和相同的 OPD prompts，只比较：
+
+- **SFT + OPD**：Student 先学习 Teacher 的完整回答，再做 OPD；
+- **Only OPD**：Student 从 Base 模型直接开始 OPD。
+
+指标包括三个测试集的 Accuracy（avg@16）、Overlap Ratio、Overlap-Token Advantage 和 Entropy Gap。
+
+![论文 Figure 8：SFT cold start 与直接 OPD 的比较](opd_figures/figure8-off-policy-cold-start.png)
+
+*Figure 8（论文第 12 页）：蓝线为 SFT + OPD，橙线为直接 OPD。*
+
+**看到什么。** SFT + OPD 在三个测试集上始终更好，而且优势保持到训练结束。它从一开始就有更高、更稳定的 Overlap Ratio，Entropy Gap 也更小；直接 OPD 的训练则明显更不稳定。
+
+> **说人话：如果 Student 一开始听不懂 Teacher，就先让它模仿一批 Teacher 的完整解题过程，再进入 OPD。这样 Teacher 的 token 级信号从训练开始就更容易被利用。**
+
+这组实验只验证了一组 Qwen 模型和数学任务；SFT 本身也可能提高 Student 的能力，因此不能把全部收益都归因于 overlap 提高。[论文：PDF pp. 11–12，Fig. 8]
+
+### 5.2 实验二：使用 Teacher 更熟悉的 prompts
+
+这个实验从数据侧做对齐，分别检查 **prompt 模板** 和 **prompt 内容**。
+
+**（1）只对齐 prompt 模板。** 两组使用完全相同的数学题，只改变提问格式：原始 DAPO 模板，或 Teacher post-training 时使用的模板。
+
+![论文 Figure 9：Prompt 模板对齐实验](opd_figures/figure9-prompt-template-alignment.png)
+
+*Figure 9（论文第 13 页）：Teacher-aligned 模板带来更高的验证准确率和 Overlap Ratio。*
+
+因为题目内容没有变化，这张图说明：**仅仅把问题改成 Teacher 熟悉的表达方式，就能让师生更容易“对上思路”。**
+
+**（2）对齐 prompt 内容。** 原文比较 Teacher 做 RL 时见过的 DAPO-Math-17K，与去重后的 DeepMath prompts。指标包括三个测试集的 Accuracy、Overlap Ratio、overlap tokens 承载的概率质量和 Student Entropy。
+
+![论文 Figure 10：Prompt 内容对齐实验](opd_figures/figure10-prompt-content-alignment.png)
+
+*Figure 10（论文第 13 页）：橙线使用 Teacher post-training prompts，蓝线使用去重后的同领域 prompts。*
+
+**看到什么。** Teacher 熟悉的 prompts 带来更高的准确率。虽然它的 Overlap Ratio 更低，但 Student 放在 overlap tokens 上的总概率更高，说明少量共同 token 承载了更集中的信号；与此同时，Student Entropy 明显下降。
+
+> **说人话：选择 Teacher 熟悉的模板和数据，确实能让 OPD 更有效；但如果只用 Teacher 见过的数据，Student 可能过早变得过于确定。实际训练时应混入一部分 Teacher 没见过的 prompts，保留探索能力。**
+
+[论文：PDF pp. 12–13，Figs. 9–10]
+
+| 遇到的问题 | 应该怎么做 |
+|---|---|
+| Student 与 Teacher 一开始差得太远 | 先用 Teacher responses 做 SFT cold start，再进入 OPD |
+| Prompt 的格式或内容与 Teacher 训练分布不一致 | 使用 Teacher-aligned prompts，同时混入 Teacher 未见过的 prompts |
+
+## 6. 现有方法的弊端与未来方向
+
+### 6.1 作者明确指出的局限
 
 **1）证据范围局限于数学推理。**
 
@@ -344,7 +398,7 @@ $$
 
 单模型自蒸馏天然具有更高 pattern consistency，新能力往往来自 privileged information。论文的两条件框架能否直接迁移到该 setting，作者认为仍是下一步问题。[论文：PDF p. 19]
 
-### 5.2 作者提出的未来方向
+### 6.2 作者提出的未来方向
 
 - 在代码、开放式生成和其他非数学领域验证“两条件 + 高概率 token 对齐”是否仍成立；
 - 研究 pre-training 数据对 OPD 可蒸馏性的独立影响；
@@ -354,7 +408,7 @@ $$
 
 [论文：PDF pp. 16–17, 19]
 
-### 5.3 基于论文证据，我认为值得继续验证的方向
+### 6.3 基于论文证据，我认为值得继续验证的方向
 
 下面不是作者已经证明的结论，而是从现有证据推出的研究假设。
 
